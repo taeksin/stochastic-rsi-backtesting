@@ -39,6 +39,9 @@ def save_backtest_result(
     record_id = datetime.utcnow().strftime("%Y%m%d%H%M%S") + "_" + uuid4().hex
     storage = _storage_dir()
 
+    equity_path = storage / f"{record_id}_equity.csv"
+    trades_path = storage / f"{record_id}_trades.csv"
+
     price_records = price_df.copy()
     if not price_records.empty:
         if "timestamp" in price_records:
@@ -46,20 +49,16 @@ def save_backtest_result(
         price_records = price_records.apply(lambda col: col.map(_to_python_number))
         price_records = price_records.where(price_records.notna(), None)
 
-    equity_values = report.equity_curve.reset_index(drop=True).tolist()
-    timestamps = (
-        price_df["timestamp"].astype(str).tolist()
-        if "timestamp" in price_df.columns
-        else list(range(len(equity_values)))
+    equity_series = report.equity_curve
+    if not isinstance(equity_series.index, pd.DatetimeIndex):
+        equity_series.index = pd.to_datetime(equity_series.index, errors="coerce")
+    equity_df = pd.DataFrame(
+        {
+            "timestamp": equity_series.index.astype(str),
+            "equity": equity_series.astype(float).tolist(),
+        }
     )
-    equity_curve = []
-    for ts, val in zip(timestamps, equity_values):
-        equity_curve.append(
-            {
-                "timestamp": ts,
-                "equity": _to_python_number(val),
-            }
-        )
+    equity_df.to_csv(equity_path, index=False)
 
     trades_records: List[Dict[str, Any]] = []
     if report.trades is not None and not report.trades.empty:
@@ -91,8 +90,10 @@ def save_backtest_result(
         trades_df = trades_df[expected_columns]
         trades_df = trades_df.apply(lambda col: col.map(_to_python_number))
         trades_df = trades_df.where(trades_df.notna(), None)
-        trades_records = trades_df.to_dict(orient="records")
+        trades_df.to_csv(trades_path, index=False)
+        trades_records = []
     else:
+        trades_path.touch()
         trades_records = []
 
     metrics = {key: _to_python_number(value) for key, value in report.metrics.items()}
@@ -102,9 +103,11 @@ def save_backtest_result(
         "created_at": datetime.utcnow().isoformat(),
         "context": context,
         "metrics": metrics,
-        "equity_curve": equity_curve,
         "price_data": price_records.to_dict(orient="records"),
-        "trades": trades_records,
+        "files": {
+            "equity_curve_csv": equity_path.name,
+            "trades_csv": trades_path.name,
+        },
     }
 
     file_path = storage / f"{record_id}.json"
@@ -145,3 +148,39 @@ def load_backtest(backtest_id: str) -> Optional[Dict[str, Any]]:
         return None
     with file_path.open("r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def load_equity_curve_csv(metadata: Dict[str, Any]) -> pd.Series:
+    files = metadata.get("files", {})
+    path = files.get("equity_curve_csv")
+    if not path:
+        entries = metadata.get("equity_curve", [])
+        if entries:
+            index = pd.to_datetime([entry.get("timestamp") for entry in entries], errors="coerce")
+            values = [entry.get("equity") for entry in entries]
+            return pd.Series(values, index=index)
+        return pd.Series(dtype=float)
+
+    storage = _storage_dir()
+    csv_path = storage / path
+    if not csv_path.exists():
+        return pd.Series(dtype=float)
+    df = pd.read_csv(csv_path)
+    if "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+        df = df.sort_values("timestamp")
+        return pd.Series(df["equity"].values, index=df["timestamp"])
+    return pd.Series(df.iloc[:, 0].values)
+
+
+def load_trades_csv(metadata: Dict[str, Any]) -> pd.DataFrame:
+    files = metadata.get("files", {})
+    path = files.get("trades_csv")
+    storage = _storage_dir()
+    if path:
+        csv_path = storage / path
+        if csv_path.exists():
+            df = pd.read_csv(csv_path)
+            return df
+    trades = metadata.get("trades", [])
+    return pd.DataFrame(trades)

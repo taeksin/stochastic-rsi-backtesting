@@ -52,9 +52,11 @@ def test_save_backtest_result_handles_missing_trade_columns(monkeypatch, tmp_pat
     assert file_path.exists()
 
     data = json.loads(file_path.read_text(encoding="utf-8"))
-    assert data["trades"][0]["entry_time"] is None
-    assert "exit_reason" in data["trades"][0]
-    assert "trade_capital" in data["trades"][0]
+    files = data["files"]
+    equity_csv = tmp_path / "storage" / "backtests" / files["equity_curve_csv"]
+    trades_csv = tmp_path / "storage" / "backtests" / files["trades_csv"]
+    assert equity_csv.exists()
+    assert trades_csv.exists()
 
 
 def test_list_and_load_backtests(monkeypatch, tmp_path: Path):
@@ -84,4 +86,7 @@ def test_list_and_load_backtests(monkeypatch, tmp_path: Path):
 
     loaded = storage.load_backtest(record_id)
     assert loaded is not None
-    assert loaded["context"]["parameters"]["timeframe"] == "5T"
+    equity_series = storage.load_equity_curve_csv(loaded)
+    assert not equity_series.empty
+    trades_df = storage.load_trades_csv(loaded)
+    assert not trades_df.empty

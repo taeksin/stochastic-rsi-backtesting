@@ -175,23 +175,8 @@ def load_saved_result(backtest_id: str) -> Optional[Dict[str, Any]]:
             if col in price_df.columns:
                 price_df[col] = pd.to_numeric(price_df[col], errors="coerce")
 
-    equity_entries = data.get("equity_curve", [])
-    if equity_entries:
-        equity_index = pd.to_datetime(
-            [entry.get("timestamp") for entry in equity_entries], errors="coerce"
-        )
-        if hasattr(equity_index, "tz") and equity_index.tz is not None:
-            equity_index = equity_index.tz_localize(None)
-        equity_values = [entry.get("equity") for entry in equity_entries]
-        equity_curve = pd.Series(equity_values, index=equity_index)
-    else:
-        equity_curve = pd.Series(dtype=float)
-
-    trades_df = pd.DataFrame(data.get("trades", []))
-    if not trades_df.empty:
-        for col in ["pnl_pct", "pnl_value", "trade_capital", "balance"]:
-            if col in trades_df.columns:
-                trades_df[col] = pd.to_numeric(trades_df[col], errors="coerce")
+    equity_curve = storage.load_equity_curve_csv(data)
+    trades_df = storage.load_trades_csv(data)
 
     return {
         "price_df": price_df,
