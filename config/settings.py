@@ -32,6 +32,7 @@ class BacktestDefaults:
     position_capital: float
     take_profit_pct: float
     stop_loss_pct: float
+    ma_cooldown_minutes: int
 
 
 @dataclass(slots=True)
@@ -65,6 +66,7 @@ def load_settings() -> Settings:
         position_capital=float(os.getenv("DEFAULT_POSITION_CAPITAL", "1000000")),
         take_profit_pct=float(os.getenv("DEFAULT_TAKE_PROFIT", "0.02")),
         stop_loss_pct=float(os.getenv("DEFAULT_STOP_LOSS", "0.015")),
+        ma_cooldown_minutes=int(os.getenv("DEFAULT_MA_COOLDOWN_MINUTES", "60")),
     )
     return Settings(database=database, backtest=backtest)
 

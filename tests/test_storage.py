@@ -90,3 +90,16 @@ def test_list_and_load_backtests(monkeypatch, tmp_path: Path):
     assert not equity_series.empty
     trades_df = storage.load_trades_csv(loaded)
     assert not trades_df.empty
+
+
+def test_load_trades_csv_handles_empty_file(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(storage, "_root_dir", lambda: tmp_path)
+
+    storage_dir = tmp_path / "storage" / "backtests"
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    empty_path = storage_dir / "empty_trades.csv"
+    empty_path.write_text("entry_index,entry_time,exit_index,exit_time,direction,pnl_pct,pnl_value,balance,exit_reason,trade_capital\n", encoding="utf-8")
+
+    meta = {"files": {"trades_csv": empty_path.name}}
+    df = storage.load_trades_csv(meta)
+    assert df.empty

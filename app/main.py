@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from datetime import datetime
 from pathlib import Path
+import io
 from typing import Any, Dict, Optional
 
 if __package__ in (None, ""):
@@ -18,8 +19,10 @@ from app.components import charts, metrics_display, sidebar
 from config.settings import settings
 from src.backtesting.engine import BacktestEngine
 from src.strategy.ma200_stochrsi import MA200StochRSIStrategy, StrategyParameters
-from src.utils.logger import configure_logging
+from src.utils.logger_confg import get_logger
 from src.utils import storage
+
+logger = get_logger()
 
 
 def generate_mock_data(
@@ -115,6 +118,7 @@ def render_backtest_results(
     position_capital: float,
     take_profit_pct: float,
     stop_loss_pct: float,
+    ma_cooldown_minutes: int,
 ) -> None:
     charts.render_price_chart(price_df)
     charts.render_equity_curve(equity_curve)
@@ -123,14 +127,31 @@ def render_backtest_results(
     st.subheader("거래 내역")
     st.caption(
         f"초기 자본: {initial_capital:,.0f} | 거래당 투입 자본: {position_capital:,.0f} | "
-        f"손절: {stop_loss_pct * 100:.2f}% | 익절: {take_profit_pct * 100:.2f}%"
+        f"손절: {stop_loss_pct * 100:.2f}% | 익절: {take_profit_pct * 100:.2f}% | "
+        f"MA 쿨다운: {ma_cooldown_minutes}분"
     )
 
     display_df = format_trade_table(trades_df)
     if display_df.empty:
         st.info("거래 내역이 없습니다.")
     else:
-        st.dataframe(display_df, use_container_width=True)
+        max_rows = 300
+        total_rows = len(display_df)
+        truncated_df = display_df.head(max_rows)
+        if total_rows > max_rows:
+            st.info(f"총 {total_rows}건 중 처음 {max_rows}건만 표에 표시합니다. 전체 내역은 아래에서 다운로드하세요.")
+        st.dataframe(truncated_df, use_container_width=True, height=420)
+
+        csv_buffer = io.StringIO()
+        display_df.to_csv(csv_buffer, index=False)
+        st.download_button(
+            "전체 거래 CSV 다운로드",
+            csv_buffer.getvalue(),
+            file_name="trades.csv",
+            mime="text/csv",
+        )
+
+
 
 
 def build_context(state: sidebar.SidebarState) -> Dict[str, Any]:
@@ -153,16 +174,23 @@ def build_context(state: sidebar.SidebarState) -> Dict[str, Any]:
             "leverage": state.leverage,
             "take_profit_pct": state.take_profit_pct,
             "stop_loss_pct": state.stop_loss_pct,
+            "ma_cooldown_minutes": state.ma_cooldown_minutes,
         },
     }
 
 
 def load_saved_result(backtest_id: str) -> Optional[Dict[str, Any]]:
+    logger.info(f"Loading saved backtest: {backtest_id}")
     data = storage.load_backtest(backtest_id)
     if not data:
+        logger.warning(f"Backtest record not found: {backtest_id}")
         return None
 
-    price_df = pd.DataFrame(data.get("price_data", []))
+    price_loader = getattr(storage, "load_price_csv", None)
+    if callable(price_loader):
+        price_df = price_loader(data)
+    else:
+        price_df = pd.DataFrame(data.get("price_data", []))
     if not price_df.empty and "timestamp" in price_df.columns:
         price_df["timestamp"] = pd.to_datetime(price_df["timestamp"], errors="coerce")
         if hasattr(price_df["timestamp"].dt, "tz"):
@@ -178,19 +206,21 @@ def load_saved_result(backtest_id: str) -> Optional[Dict[str, Any]]:
     equity_curve = storage.load_equity_curve_csv(data)
     trades_df = storage.load_trades_csv(data)
 
-    return {
+    result = {
         "price_df": price_df,
         "equity_curve": equity_curve,
         "metrics": data.get("metrics", {}),
         "trades": trades_df,
         "context": data.get("context", {}),
     }
+    logger.info(f"Finished loading backtest: {backtest_id}")
+    return result
 
 
 def main() -> None:
-    configure_logging()
+    logger.info("Streamlit app initialization")
     st.set_page_config(page_title="Stochastic RSI Backtester", layout="wide")
-    st.title("📊 MA200 + Stochastic RSI 백테스팅")
+    st.title("비트코인 MA200 + Stochastic RSI 백테스트")
 
     initial_capital = settings.backtest.initial_capital
     default_position_capital = getattr(
@@ -210,17 +240,20 @@ def main() -> None:
         default_position_capital=default_position_capital,
         default_take_profit_pct=default_take_profit_pct,
         default_stop_loss_pct=default_stop_loss_pct,
+        default_ma_cooldown=settings.backtest.ma_cooldown_minutes,
         saved_results=saved_backtests,
     )
 
+
+
     if state.mode == "분석":
         if not state.selected_backtest_id:
-            st.info("사이드바에서 분석할 테스트를 선택하세요.")
+            st.info("사이드바에서 분석할 테스트를 선택해주세요.")
             return
 
         saved = load_saved_result(state.selected_backtest_id)
         if saved is None:
-            st.error("선택한 테스트 기록을 불러올 수 없습니다.")
+            st.error("선택한 테스트 기록을 불러오지 못했습니다.")
             return
 
         context = saved.get("context", {})
@@ -228,9 +261,10 @@ def main() -> None:
         settings_ctx = context.get("settings", {})
         tp_ctx = settings_ctx.get("take_profit_pct", default_take_profit_pct)
         sl_ctx = settings_ctx.get("stop_loss_pct", default_stop_loss_pct)
+        cooldown_ctx = settings_ctx.get("ma_cooldown_minutes", settings.backtest.ma_cooldown_minutes)
 
         st.subheader("저장된 테스트 결과")
-        summary_lines = []
+        summary_lines: list[str] = []
         if parameters:
             period = f"{parameters.get('start_date','')} ~ {parameters.get('end_date','')}"
             summary_lines.append(f"- **기간:** {period}")
@@ -244,7 +278,7 @@ def main() -> None:
             )
         summary_lines.append(
             "- **리스크 설정:** "
-            f"TP {tp_ctx * 100:.2f}% / SL {sl_ctx * 100:.2f}%"
+            f"TP {tp_ctx * 100:.2f}% / SL {sl_ctx * 100:.2f}% / 쿨다운 {cooldown_ctx}분"
         )
         if summary_lines:
             st.markdown("\n".join(summary_lines))
@@ -261,8 +295,11 @@ def main() -> None:
             position_capital=position_cap,
             take_profit_pct=tp_ctx,
             stop_loss_pct=sl_ctx,
+            ma_cooldown_minutes=cooldown_ctx,
         )
         return
+
+
 
     data_start = datetime.combine(state.start_date, datetime.min.time())
     data_end = datetime.combine(state.end_date, datetime.min.time())
@@ -284,6 +321,17 @@ def main() -> None:
         st.info("사이드바에서 파라미터를 설정한 뒤 '백테스트 실행' 버튼을 눌러주세요.")
         return
 
+    logger.info(
+        "Backtest start | %s ~ %s | timeframe %s | leverage x%d | TP %.2f%% | SL %.2f%% | cooldown %d min",
+        state.start_date.isoformat(),
+        state.end_date.isoformat(),
+        state.timeframe,
+        state.leverage,
+        state.take_profit_pct * 100,
+        state.stop_loss_pct * 100,
+        state.ma_cooldown_minutes,
+    )
+
     report = engine.run(
         price_df,
         strategy=strategy,
@@ -293,6 +341,17 @@ def main() -> None:
         stop_loss_pct=state.stop_loss_pct,
     )
 
+    trades_count = len(report.trades) if report.trades is not None else 0
+    total_return = report.metrics.get("total_return") if report.metrics else None
+    if isinstance(total_return, (int, float)) and not np.isnan(total_return):
+        logger.info(
+            "Backtest end   | trades %d | total return %.2f%%",
+            trades_count,
+            total_return * 100,
+        )
+    else:
+        logger.info("Backtest end   | trades %d | total return N/A", trades_count)
+
     equity_curve = pd.Series(
         report.equity_curve.values,
         index=pd.to_datetime(price_df["timestamp"]),
@@ -300,7 +359,8 @@ def main() -> None:
 
     context = build_context(state)
     saved_id = storage.save_backtest_result(report, price_df, context)
-    st.success(f"테스트 결과가 저장되었습니다. 기록 ID: {saved_id}")
+    logger.info("Backtest saved | record id %s", saved_id)
+    st.success(f"백테스트 결과가 저장되었습니다. 기록 ID: {saved_id}")
 
     render_backtest_results(
         price_df=price_df,
@@ -311,6 +371,7 @@ def main() -> None:
         position_capital=state.position_capital,
         take_profit_pct=state.take_profit_pct,
         stop_loss_pct=state.stop_loss_pct,
+        ma_cooldown_minutes=state.ma_cooldown_minutes,
     )
 
 

@@ -21,6 +21,7 @@ class StrategyParameters:
     stoch_d: int = 3
     oversold: float = 20.0
     overbought: float = 80.0
+    cooldown_minutes: int = 60
 
 
 class MA200StochRSIStrategy(BaseStrategy):
@@ -30,6 +31,9 @@ class MA200StochRSIStrategy(BaseStrategy):
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         ensure_columns(df, ["close"])
         result = df.copy()
+        has_timestamp = "timestamp" in result.columns
+        if has_timestamp:
+            result["timestamp"] = pd.to_datetime(result["timestamp"], errors="coerce")
 
         result["ma_trend"] = calculate_sma(result, period=self.params.ma_period)
         stoch_df = stochastic_rsi.calculate(
@@ -49,15 +53,51 @@ class MA200StochRSIStrategy(BaseStrategy):
             ["golden_cross", "dead_cross"]
         ].fillna(False).astype(bool)
 
+        ma_trend_valid = result["ma_trend"].notna()
+        bias = np.where(
+            ma_trend_valid & (result["close"] >= result["ma_trend"]),
+            1,
+            np.where(ma_trend_valid, -1, 0),
+        )
+        bias_series = pd.Series(bias, index=result.index)
+        result["ma_bias"] = bias_series
+        bias_change = bias_series.ne(bias_series.shift(1)).fillna(False) & (bias_series != 0)
+        result["ma_bias_change"] = bias_change
+
+        cooldown_mask_long = pd.Series(False, index=result.index)
+        cooldown_mask_short = pd.Series(False, index=result.index)
+        cooldown_minutes = max(int(getattr(self.params, "cooldown_minutes", 0) or 0), 0)
+        if cooldown_minutes > 0 and has_timestamp:
+            timestamps = result["timestamp"]
+            cooldown_delta = pd.to_timedelta(cooldown_minutes, unit="m")
+            change_times = timestamps.where(bias_change, pd.NaT)
+            last_change = change_times.ffill()
+            cooldown_until = last_change + cooldown_delta
+            cooldown_active = (
+                cooldown_until.notna()
+                & timestamps.notna()
+                & (cooldown_until > timestamps)
+                & (bias_series != 0)
+            )
+            result["cooldown_until"] = cooldown_until
+            result["cooldown_active"] = cooldown_active.fillna(False)
+            cooldown_mask_long = cooldown_active & (bias_series > 0)
+            cooldown_mask_short = cooldown_active & (bias_series < 0)
+
+        else:
+            result["cooldown_active"] = False
+
         long_entry = (
             (result["close"] > result["ma_trend"])
             & result["golden_cross"]
             & (result["stoch_d"] < self.params.oversold)
+            & ~cooldown_mask_long
         )
         short_entry = (
             (result["close"] < result["ma_trend"])
             & result["dead_cross"]
             & (result["stoch_d"] > self.params.overbought)
+            & ~cooldown_mask_short
         )
 
         signals = np.zeros(len(result), dtype=int)

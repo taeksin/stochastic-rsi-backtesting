@@ -42,12 +42,20 @@ def save_backtest_result(
     equity_path = storage / f"{record_id}_equity.csv"
     trades_path = storage / f"{record_id}_trades.csv"
 
+    price_path = storage / f"{record_id}_price.csv"
     price_records = price_df.copy()
     if not price_records.empty:
-        if "timestamp" in price_records:
-            price_records["timestamp"] = price_records["timestamp"].astype(str)
-        price_records = price_records.apply(lambda col: col.map(_to_python_number))
-        price_records = price_records.where(price_records.notna(), None)
+        if "timestamp" in price_records.columns:
+            ts = pd.to_datetime(price_records["timestamp"], errors="coerce")
+            if hasattr(ts.dt, "tz"):
+                try:
+                    ts = ts.dt.tz_localize(None)
+                except TypeError:
+                    ts = ts.dt.tz_convert(None)
+            price_records["timestamp"] = ts
+        price_records.to_csv(price_path, index=False)
+    else:
+        price_path.touch()
 
     equity_series = report.equity_curve
     if not isinstance(equity_series.index, pd.DatetimeIndex):
@@ -60,21 +68,22 @@ def save_backtest_result(
     )
     equity_df.to_csv(equity_path, index=False)
 
+    expected_columns = [
+        "entry_index",
+        "entry_time",
+        "exit_index",
+        "exit_time",
+        "direction",
+        "pnl_pct",
+        "pnl_value",
+        "balance",
+        "exit_reason",
+        "trade_capital",
+    ]
+
     trades_records: List[Dict[str, Any]] = []
     if report.trades is not None and not report.trades.empty:
         trades_df = report.trades.copy()
-        expected_columns = [
-            "entry_index",
-            "entry_time",
-            "exit_index",
-            "exit_time",
-            "direction",
-            "pnl_pct",
-            "pnl_value",
-            "balance",
-            "exit_reason",
-            "trade_capital",
-        ]
         for column in expected_columns:
             if column not in trades_df.columns:
                 trades_df[column] = None
@@ -93,7 +102,7 @@ def save_backtest_result(
         trades_df.to_csv(trades_path, index=False)
         trades_records = []
     else:
-        trades_path.touch()
+        pd.DataFrame(columns=expected_columns).to_csv(trades_path, index=False)
         trades_records = []
 
     metrics = {key: _to_python_number(value) for key, value in report.metrics.items()}
@@ -103,11 +112,12 @@ def save_backtest_result(
         "created_at": datetime.utcnow().isoformat(),
         "context": context,
         "metrics": metrics,
-        "price_data": price_records.to_dict(orient="records"),
         "files": {
+            "price_csv": price_path.name,
             "equity_curve_csv": equity_path.name,
             "trades_csv": trades_path.name,
         },
+        "price_data": [],
     }
 
     file_path = storage / f"{record_id}.json"
@@ -180,7 +190,22 @@ def load_trades_csv(metadata: Dict[str, Any]) -> pd.DataFrame:
     if path:
         csv_path = storage / path
         if csv_path.exists():
-            df = pd.read_csv(csv_path)
+            try:
+                df = pd.read_csv(csv_path)
+            except pd.errors.EmptyDataError:
+                df = pd.DataFrame()
             return df
     trades = metadata.get("trades", [])
     return pd.DataFrame(trades)
+
+
+def load_price_csv(metadata: Dict[str, Any]) -> pd.DataFrame:
+    files = metadata.get("files", {})
+    path = files.get("price_csv")
+    storage = _storage_dir()
+    if path:
+        csv_path = storage / path
+        if csv_path.exists():
+            return pd.read_csv(csv_path)
+    price_data = metadata.get("price_data", [])
+    return pd.DataFrame(price_data)
