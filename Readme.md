@@ -43,7 +43,7 @@ class BacktestConfig:
     
     # Backtest Parameters (UI에서 수정 가능)
     initial_capital: float = 1_000_000  # $1M
-    leverage: int = 30                   # 기본 30배
+    leverage: int = 1                    # 기본 1배
     timeframe: Literal['5min', '10min', '15min'] = '5min'
     
     # Candle Type
@@ -62,8 +62,8 @@ class BacktestConfig:
     overbought: int = 80                 # 과매수 기준
     
     # Risk Management
-    stop_loss_pct: float = 15.0         # 손절 15%
-    take_profit_pct: float = 20.0       # 익절 20%
+    stop_loss_pct: float = 1.5          # 손절 1.5%
+    take_profit_pct: float = 2.0        # 익절 2%
 ```
 
 ### 2. src/candles.py - 하이킨아시 계산[1][2]
@@ -404,9 +404,9 @@ ma_type = st.sidebar.selectbox("이동평균선 타입", ['EMA', 'SMA'], index=0
 ma_period = st.sidebar.slider("이동평균선 기간", 50, 300, 200)
 
 # 레버리지 & 리스크 관리
-leverage = st.sidebar.slider("레버리지", 1, 30, 30)
-stop_loss = st.sidebar.slider("손절 (%)", 5.0, 30.0, 15.0, step=0.5)
-take_profit = st.sidebar.slider("익절 (%)", 5.0, 50.0, 20.0, step=0.5)
+leverage = st.sidebar.slider("레버리지", 1, 30, 1)
+stop_loss = st.sidebar.slider("손절 (%)", 0.5, 10.0, 1.5, step=0.1)
+take_profit = st.sidebar.slider("익절 (%)", 0.5, 15.0, 2.0, step=0.1)
 
 # 스토캐스틱 RSI
 with st.sidebar.expander("스토캐스틱 RSI 설정"):
@@ -503,7 +503,7 @@ if st.button("백테스팅 시작", type="primary"):
 - ✅ EMA 200선 기반 추세 판단
 - ✅ 스토캐스틱 RSI 크로스오버 시그널
 - ✅ 롱/숏 + TP/SL 자동 설정
-- ✅ 레버리지 30배 기본
+- ✅ 레버리지 1배 기본
 
 ## 🚀 실행
 
@@ -530,9 +530,9 @@ uv run streamlit run app/main.py
 3. 하이킨아시: 몸통이 이전보다 크고 + 윗꼬리 없음
 
 ### 청산 조건
-- **Stop Loss**: 진입가 대비 -15% (기본)
-- **Take Profit**: 진입가 대비 +20% (기본)
-- 손익비 1.5:2
+- **Stop Loss**: 진입가 대비 -1.5% (기본)
+- **Take Profit**: 진입가 대비 +2% (기본)
+- 손익비 1.5% : 2%
 
 ## ⚙️ 설정 가능 파라미터
 
@@ -541,9 +541,9 @@ uv run streamlit run app/main.py
 | 캔들 타입 | 하이킨아시 | 일반 캔들로 변경 가능 |
 | 타임프레임 | 5분 | 5/10/15분 선택 |
 | 이동평균선 | EMA 200 | 기간 조정 가능 |
-| 레버리지 | 30배 | 1~30배 |
-| 손절 | 15% | 조정 가능 |
-| 익절 | 20% | 조정 가능 |
+| 레버리지 | 1배 | 1~30배 |
+| 손절 | 1.5% | 조정 가능 |
+| 익절 | 2% | 조정 가능 |
 
 ## 📁 구조
 

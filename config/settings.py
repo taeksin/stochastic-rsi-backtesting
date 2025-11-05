@@ -62,7 +62,7 @@ def load_settings() -> Settings:
     backtest = BacktestDefaults(
         timeframe=os.getenv("DEFAULT_TIMEFRAME", "5T"),
         initial_capital=float(os.getenv("DEFAULT_INITIAL_CAPITAL", "1000000")),
-        leverage=int(os.getenv("DEFAULT_LEVERAGE", "10")),
+        leverage=int(os.getenv("DEFAULT_LEVERAGE", "1")),
         position_capital=float(os.getenv("DEFAULT_POSITION_CAPITAL", "1000000")),
         take_profit_pct=float(os.getenv("DEFAULT_TAKE_PROFIT", "0.02")),
         stop_loss_pct=float(os.getenv("DEFAULT_STOP_LOSS", "0.015")),
