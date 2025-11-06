@@ -43,7 +43,8 @@ def save_backtest_result(
     trades_path = storage / f"{record_id}_trades.csv"
 
     price_path = storage / f"{record_id}_price.csv"
-    price_records = price_df.copy()
+    price_records = getattr(report, "price_frame", price_df)
+    price_records = price_records.copy()
     if not price_records.empty:
         if "timestamp" in price_records.columns:
             ts = pd.to_datetime(price_records["timestamp"], errors="coerce")
@@ -53,7 +54,7 @@ def save_backtest_result(
                 except TypeError:
                     ts = ts.dt.tz_convert(None)
             price_records["timestamp"] = ts
-        price_records.to_csv(price_path, index=False)
+        price_records.to_csv(price_path, index=False, encoding="utf-8-sig")
     else:
         price_path.touch()
 
@@ -66,7 +67,8 @@ def save_backtest_result(
             "equity": equity_series.astype(float).tolist(),
         }
     )
-    equity_df.to_csv(equity_path, index=False)
+    equity_df = equity_df.sort_values("timestamp")
+    equity_df.to_csv(equity_path, index=False, encoding="utf-8-sig")
 
     expected_columns = [
         "entry_index",
@@ -79,6 +81,8 @@ def save_backtest_result(
         "balance",
         "exit_reason",
         "trade_capital",
+        "exit_signal",
+        "exit_price",
     ]
 
     trades_records: List[Dict[str, Any]] = []
@@ -99,10 +103,10 @@ def save_backtest_result(
         trades_df = trades_df[expected_columns]
         trades_df = trades_df.apply(lambda col: col.map(_to_python_number))
         trades_df = trades_df.where(trades_df.notna(), None)
-        trades_df.to_csv(trades_path, index=False)
+        trades_df.to_csv(trades_path, index=False, encoding="utf-8-sig")
         trades_records = []
     else:
-        pd.DataFrame(columns=expected_columns).to_csv(trades_path, index=False)
+        pd.DataFrame(columns=expected_columns).to_csv(trades_path, index=False, encoding="utf-8-sig")
         trades_records = []
 
     metrics = {key: _to_python_number(value) for key, value in report.metrics.items()}
@@ -118,6 +122,7 @@ def save_backtest_result(
             "trades_csv": trades_path.name,
         },
         "price_data": [],
+        "trades": trades_records,
     }
 
     file_path = storage / f"{record_id}.json"
@@ -160,45 +165,6 @@ def load_backtest(backtest_id: str) -> Optional[Dict[str, Any]]:
         return json.load(f)
 
 
-def load_equity_curve_csv(metadata: Dict[str, Any]) -> pd.Series:
-    files = metadata.get("files", {})
-    path = files.get("equity_curve_csv")
-    if not path:
-        entries = metadata.get("equity_curve", [])
-        if entries:
-            index = pd.to_datetime([entry.get("timestamp") for entry in entries], errors="coerce")
-            values = [entry.get("equity") for entry in entries]
-            return pd.Series(values, index=index)
-        return pd.Series(dtype=float)
-
-    storage = _storage_dir()
-    csv_path = storage / path
-    if not csv_path.exists():
-        return pd.Series(dtype=float)
-    df = pd.read_csv(csv_path)
-    if "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-        df = df.sort_values("timestamp")
-        return pd.Series(df["equity"].values, index=df["timestamp"])
-    return pd.Series(df.iloc[:, 0].values)
-
-
-def load_trades_csv(metadata: Dict[str, Any]) -> pd.DataFrame:
-    files = metadata.get("files", {})
-    path = files.get("trades_csv")
-    storage = _storage_dir()
-    if path:
-        csv_path = storage / path
-        if csv_path.exists():
-            try:
-                df = pd.read_csv(csv_path)
-            except pd.errors.EmptyDataError:
-                df = pd.DataFrame()
-            return df
-    trades = metadata.get("trades", [])
-    return pd.DataFrame(trades)
-
-
 def load_price_csv(metadata: Dict[str, Any]) -> pd.DataFrame:
     files = metadata.get("files", {})
     path = files.get("price_csv")
@@ -206,6 +172,66 @@ def load_price_csv(metadata: Dict[str, Any]) -> pd.DataFrame:
     if path:
         csv_path = storage / path
         if csv_path.exists():
-            return pd.read_csv(csv_path)
-    price_data = metadata.get("price_data", [])
-    return pd.DataFrame(price_data)
+            try:
+                df = pd.read_csv(csv_path)
+            except pd.errors.EmptyDataError:
+                return pd.DataFrame()
+            if not df.empty and "exit_signal" in df.columns:
+                df["exit_signal"] = df["exit_signal"].fillna("").astype(str)
+            return df
+    return pd.DataFrame(metadata.get("price_data", []))
+
+
+def load_equity_curve_csv(metadata: Dict[str, Any]) -> pd.Series:
+    files = metadata.get("files", {})
+    path = files.get("equity_curve_csv")
+    if path:
+        storage = _storage_dir()
+        csv_path = storage / path
+        if csv_path.exists():
+            df = pd.read_csv(csv_path)
+            if "timestamp" in df.columns:
+                df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+                df = df.sort_values("timestamp")
+                return pd.Series(df["equity"].values, index=df["timestamp"])
+            return pd.Series(df.iloc[:, 0].values)
+
+    entries = metadata.get("equity_curve", [])
+    if entries:
+        index = pd.to_datetime([entry.get("timestamp") for entry in entries], errors="coerce")
+        values = [entry.get("equity") for entry in entries]
+        return pd.Series(values, index=index)
+    return pd.Series(dtype=float)
+
+
+def load_trades_csv(metadata: Dict[str, Any]) -> pd.DataFrame:
+    files = metadata.get("files", {})
+    path = files.get("trades_csv")
+    storage = _storage_dir()
+    df: pd.DataFrame
+    if path:
+        csv_path = storage / path
+        if csv_path.exists():
+            try:
+                df = pd.read_csv(csv_path)
+            except pd.errors.EmptyDataError:
+                df = pd.DataFrame()
+        else:
+            df = pd.DataFrame()
+    else:
+        df = pd.DataFrame(metadata.get("trades", []))
+
+    if not df.empty:
+        if "exit_reason" in df.columns:
+            df["exit_reason"] = df["exit_reason"].fillna("").astype(str)
+        if "exit_signal" in df.columns:
+            df["exit_signal"] = df["exit_signal"].fillna("").astype(str)
+        if "exit_price" in df.columns:
+            df["exit_price"] = pd.to_numeric(df["exit_price"], errors="coerce")
+        if "trade_capital" in df.columns:
+            df["trade_capital"] = pd.to_numeric(df["trade_capital"], errors="coerce")
+        if "pnl_value" in df.columns:
+            df["pnl_value"] = pd.to_numeric(df["pnl_value"], errors="coerce")
+        if "pnl_pct" in df.columns:
+            df["pnl_pct"] = pd.to_numeric(df["pnl_pct"], errors="coerce")
+    return df

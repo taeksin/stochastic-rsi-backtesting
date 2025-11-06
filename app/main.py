@@ -76,24 +76,99 @@ def format_trade_table(trades_df: pd.DataFrame) -> pd.DataFrame:
     entry_time = entry_time.dt.tz_localize(None)
     exit_time = exit_time.dt.tz_localize(None)
 
-    direction = df["direction"].copy() if "direction" in df else pd.Series("", index=df.index)
-    direction = direction.map({"long": "롱", "short": "숏"}).fillna(direction)
+    raw_direction = df["direction"].fillna("") if "direction" in df else pd.Series("", index=df.index)
+    direction = raw_direction.map({"long": "롱", "short": "숏"}).fillna(raw_direction)
 
     pnl_pct = pd.to_numeric(df.get("pnl_pct"), errors="coerce") if "pnl_pct" in df else pd.Series(0, index=df.index)
     pnl_pct = pnl_pct * 100
     pnl_value = pd.to_numeric(df.get("pnl_value"), errors="coerce") if "pnl_value" in df else pd.Series(0, index=df.index)
     capital_used = pd.to_numeric(df.get("trade_capital"), errors="coerce") if "trade_capital" in df else pd.Series(0, index=df.index)
     balance = pd.to_numeric(df.get("balance"), errors="coerce") if "balance" in df else pd.Series(0, index=df.index)
-    reason = df.get("exit_reason") if "exit_reason" in df else pd.Series("", index=df.index)
-    reason = reason.map(
-        {
-            "take_profit": "익절",
-            "stop_loss": "손절",
-            "strategy_exit": "전략 종료",
-            "reverse": "포지션 전환",
-            "end_of_data": "기간 종료",
-        }
-    ).fillna(reason)
+    exit_price = pd.to_numeric(df.get("exit_price"), errors="coerce") if "exit_price" in df else pd.Series(np.nan, index=df.index)
+    reason_codes = df.get("exit_reason") if "exit_reason" in df else pd.Series("", index=df.index)
+    signal_codes = df.get("exit_signal") if "exit_signal" in df else pd.Series("", index=df.index)
+
+    def format_price(value: float) -> str:
+        return f"{value:,.0f}" if pd.notna(value) else "N/A"
+
+    reason_labels = {
+        "strategy_exit_dead_cross": "스토캐스틱 데드크로스 재발생",
+        "strategy_exit_golden_cross": "스토캐스틱 골든크로스 재발생",
+        "strategy_exit_cooldown": "MA 쿨다운 진행 중",
+        "strategy_exit_ma_neutral": "MA 바이어스 중립화",
+        "strategy_exit_other": "전략 조건 해제",
+        "strategy_exit": "전략 조건 해제",
+        "end_of_data": "데이터 종료 시점",
+        "unknown_exit": "기타 종료",
+    }
+    signal_labels = {
+        "dead_cross_exit": "스토캐스틱 데드크로스 재발생",
+        "golden_cross_exit": "스토캐스틱 골든크로스 재발생",
+        "cooldown_exit": "MA 쿨다운 진행 중",
+        "bias_neutral_exit": "MA 바이어스 중립화",
+        "reverse_to_long": "반대 신호 도착 (롱)",
+        "reverse_to_short": "반대 신호 도착 (숏)",
+        "reverse": "반대 신호 도착",
+    }
+
+    detailed_reason = []
+    for code, price, signal, raw_dir in zip(
+        reason_codes.fillna(""),
+        exit_price,
+        signal_codes.fillna(""),
+        raw_direction.fillna(""),
+    ):
+        if code in {"stop_loss", "stop_loss_long", "stop_loss_short"}:
+            detailed_reason.append(f"손절가 {format_price(price)}에 도달하여 포지션 종료")
+        elif code in {"take_profit", "take_profit_long", "take_profit_short"}:
+            detailed_reason.append(f"익절가 {format_price(price)}에 도달하여 포지션 종료")
+        elif code in {"reverse_to_long"}:
+            detailed_reason.append(f"숏→롱 포지션 전환으로 인해서 포지션 종료 (가격 {format_price(price)})")
+        elif code in {"reverse_to_short"}:
+            detailed_reason.append(f"롱→숏 포지션 전환으로 인해서 포지션 종료 (가격 {format_price(price)})")
+        elif code == "reverse":
+            lower_dir = str(raw_dir).lower()
+            if lower_dir == "long":
+                detailed_reason.append(f"숏→롱 포지션 전환으로 인해서 포지션 종료 (가격 {format_price(price)})")
+            elif lower_dir == "short":
+                detailed_reason.append(f"롱→숏 포지션 전환으로 인해서 포지션 종료 (가격 {format_price(price)})")
+            else:
+                detailed_reason.append(f"반대 시그널로 포지션 종료 (가격 {format_price(price)})")
+        elif code == "strategy_exit_dead_cross":
+            detailed_reason.append(f"스토캐스틱 데드크로스 재발생으로 포지션 종료 (가격 {format_price(price)})")
+        elif code == "strategy_exit_golden_cross":
+            detailed_reason.append(f"스토캐스틱 골든크로스 재발생으로 포지션 종료 (가격 {format_price(price)})")
+        elif code == "strategy_exit_cooldown":
+            detailed_reason.append(f"MA 쿨다운 기간으로 포지션 종료 (가격 {format_price(price)})")
+        elif code == "strategy_exit_ma_neutral":
+            detailed_reason.append(f"MA 바이어스 중립화로 포지션 종료 (가격 {format_price(price)})")
+        elif code == "strategy_exit_other":
+            desc = {
+                "dead_cross_exit": "스토캐스틱 데드크로스 재발생",
+                "golden_cross_exit": "스토캐스틱 골든크로스 재발생",
+                "cooldown_exit": "MA 쿨다운 진행 중",
+                "bias_neutral_exit": "MA 바이어스 중립화",
+            }.get(signal, "전략 조건 해제")
+            detailed_reason.append(f"{desc}으로 포지션 종료 (가격 {format_price(price)})")
+        elif code == "strategy_exit":
+            desc = {
+                "dead_cross_exit": "스토캐스틱 데드크로스 재발생",
+                "golden_cross_exit": "스토캐스틱 골든크로스 재발생",
+                "cooldown_exit": "MA 쿨다운 진행 중",
+                "bias_neutral_exit": "MA 바이어스 중립화",
+            }.get(signal, "전략 조건 해제")
+            detailed_reason.append(f"{desc}으로 포지션 종료 (가격 {format_price(price)})")
+        elif code == "end_of_data":
+            detailed_reason.append(f"데이터 종료 시점 도달 (가격 {format_price(price)})")
+        else:
+            fallback = {
+                "strategy_exit_dead_cross": "스토캐스틱 데드크로스 재발생",
+                "strategy_exit_golden_cross": "스토캐스틱 골든크로스 재발생",
+                "strategy_exit_cooldown": "MA 쿨다운 진행 중",
+                "strategy_exit_ma_neutral": "MA 바이어스 중립화",
+            }.get(code, code if code else "-")
+            detailed_reason.append(f"{fallback} (가격 {format_price(price)})")
+    reason = pd.Series(detailed_reason, index=df.index)
 
     formatted = pd.DataFrame(
         {
@@ -103,10 +178,12 @@ def format_trade_table(trades_df: pd.DataFrame) -> pd.DataFrame:
             "수익률(%)": pnl_pct.map(lambda x: f"{x:.2f}" if pd.notna(x) else "N/A"),
             "손익 (₩)": pnl_value.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
             "투입 자본 (₩)": capital_used.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
+            "청산가 (₩)": exit_price.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
             "잔액 (₩)": balance.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
             "종료 사유": reason,
         }
     )
+    formatted.index = formatted.index + 1
     return formatted
 
 
@@ -144,7 +221,8 @@ def render_backtest_results(
         st.dataframe(truncated_df, use_container_width=True, height=420)
 
         csv_buffer = io.StringIO()
-        display_df.to_csv(csv_buffer, index=False)
+        csv_buffer.write("\ufeff")
+        display_df.reset_index().rename(columns={"index": "No."}).to_csv(csv_buffer, index=False)
         st.download_button(
             "전체 거래 CSV 다운로드",
             csv_buffer.getvalue(),
@@ -203,6 +281,11 @@ def load_saved_result(backtest_id: str) -> Optional[Dict[str, Any]]:
         for col in ["open", "high", "low", "close", "volume"]:
             if col in price_df.columns:
                 price_df[col] = pd.to_numeric(price_df[col], errors="coerce")
+        for col in ["signal", "position"]:
+            if col in price_df.columns:
+                price_df[col] = pd.to_numeric(price_df[col], errors="coerce").fillna(0).astype(int)
+        if "exit_signal" in price_df.columns:
+            price_df["exit_signal"] = price_df["exit_signal"].fillna("").astype(str)
 
     equity_curve = storage.load_equity_curve_csv(data)
     trades_df = storage.load_trades_csv(data)
@@ -313,6 +396,7 @@ def main() -> None:
         stoch_period=state.stoch_period,
         stoch_k=state.stoch_k,
         stoch_d=state.stoch_d,
+        cooldown_minutes=state.ma_cooldown_minutes,
     )
     strategy = MA200StochRSIStrategy(params=strategy_params)
     engine = BacktestEngine()
@@ -404,18 +488,16 @@ def main() -> None:
     else:
         logger.info("Backtest end   | trades %d | total return N/A", trades_count)
 
-    equity_curve = pd.Series(
-        report.equity_curve.values,
-        index=pd.to_datetime(price_df["timestamp"]),
-    )
+    equity_curve = report.equity_curve
 
     context = build_context(state)
-    saved_id = storage.save_backtest_result(report, price_df, context)
+    price_frame = getattr(report, "price_frame", price_df)
+    saved_id = storage.save_backtest_result(report, price_frame, context)
     logger.info("Backtest saved | record id %s", saved_id)
     st.success(f"백테스트 결과가 저장되었습니다. 기록 ID: {saved_id}")
 
     render_backtest_results(
-        price_df=price_df,
+        price_df=price_frame,
         equity_curve=equity_curve,
         metrics=report.metrics,
         trades_df=report.trades,

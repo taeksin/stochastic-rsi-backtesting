@@ -73,9 +73,9 @@ def render_sidebar(
     if mode == "백테스트":
         st.sidebar.subheader("백테스트 범위")
         start_date = st.sidebar.date_input("시작일", value=default_start)
-        st.sidebar.caption("시작일을 앞당기면 더 많은 과거 데이터를 포함하고, 늦추면 기간이 짧아집니다.")
+        st.sidebar.caption("시작일은 2020년 03월 26일 이후로 설정해주세요")
         end_date = st.sidebar.date_input("종료일", value=today)
-        st.sidebar.caption("종료일을 뒤로 미루면 최신 데이터까지 포함하지만 계산량이 늘어납니다.")
+        st.sidebar.caption("종료일은 오늘 날짜 이전으로 설정해주세요")
 
         timeframe = st.sidebar.selectbox(
             "캔들 간격",

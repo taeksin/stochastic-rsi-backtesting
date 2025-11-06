@@ -1,8 +1,10 @@
-/.uv-cache
-/.venv
-
-/__pycache__
 __pycache__/
-
 *.pyc
-.env
+.Python
+.DS_Store
+.env.local
+.venv/
+.uv-cache/
+.pytest_cache/
+*.log
+storage/backtests/

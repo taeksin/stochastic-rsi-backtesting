@@ -17,6 +17,7 @@ class BacktestReport:
     returns: pd.Series
     metrics: dict
     trades: pd.DataFrame
+    price_frame: pd.DataFrame
 
 
 class BacktestEngine:
@@ -80,6 +81,11 @@ class BacktestEngine:
             return str(ts)
 
         rows = data.reset_index(drop=True)
+        if "exit_signal" not in rows.columns:
+            rows["exit_signal"] = ""
+        if "cooldown_active" not in rows.columns:
+            rows["cooldown_active"] = False
+
         for idx, row in rows.iterrows():
             ts = pd.to_datetime(row["timestamp"], errors="coerce")
             close_price = float(row["close"])
@@ -101,38 +107,49 @@ class BacktestEngine:
 
             exit_flag = False
             exit_price = close_price
-            exit_reason = ""
+            exit_reason_code = "unknown_exit"
+            context_row = rows.iloc[idx]
 
             if position == 1 and entry_price is not None:
                 tp_price = entry_price * (1 + take_profit_pct)
                 sl_price = entry_price * (1 - stop_loss_pct)
                 if low_price <= sl_price:
                     exit_price = sl_price
-                    exit_reason = "stop_loss"
+                    exit_reason_code = "stop_loss_long"
                     exit_flag = True
                 elif high_price >= tp_price:
                     exit_price = tp_price
-                    exit_reason = "take_profit"
+                    exit_reason_code = "take_profit_long"
                     exit_flag = True
             elif position == -1 and entry_price is not None:
                 tp_price = entry_price * (1 - take_profit_pct)
                 sl_price = entry_price * (1 + stop_loss_pct)
                 if high_price >= sl_price:
                     exit_price = sl_price
-                    exit_reason = "stop_loss"
+                    exit_reason_code = "stop_loss_short"
                     exit_flag = True
                 elif low_price <= tp_price:
                     exit_price = tp_price
-                    exit_reason = "take_profit"
+                    exit_reason_code = "take_profit_short"
                     exit_flag = True
 
             if not exit_flag and target == 0:
                 exit_flag = True
-                exit_reason = "strategy_exit"
+                detail = str(context_row.get("exit_signal", ""))
+                if detail == "dead_cross_exit":
+                    exit_reason_code = "strategy_exit_dead_cross"
+                elif detail == "golden_cross_exit":
+                    exit_reason_code = "strategy_exit_golden_cross"
+                elif detail == "cooldown_exit":
+                    exit_reason_code = "strategy_exit_cooldown"
+                elif detail == "bias_neutral_exit":
+                    exit_reason_code = "strategy_exit_ma_neutral"
+                else:
+                    exit_reason_code = "strategy_exit_other"
                 exit_price = close_price
             elif not exit_flag and target == -position:
                 exit_flag = True
-                exit_reason = "reverse"
+                exit_reason_code = "reverse_to_long" if target > position else "reverse_to_short"
                 exit_price = close_price
 
             if exit_flag and entry_price is not None and entry_idx is not None:
@@ -155,7 +172,9 @@ class BacktestEngine:
                         "pnl_pct": trade_pct_net,
                         "pnl_value": pnl_value,
                         "trade_capital": trade_capital,
-                        "exit_reason": exit_reason,
+                        "exit_reason": exit_reason_code,
+                        "exit_signal": str(context_row.get("exit_signal", "")),
+                        "exit_price": exit_price,
                         "balance_index": idx,
                     }
                 )
@@ -166,7 +185,7 @@ class BacktestEngine:
                 entry_time = None
                 entry_fee_return = 0.0
 
-                allow_reentry = exit_reason == "reverse" and signal in (1, -1)
+                allow_reentry = exit_reason_code.startswith("reverse_") and signal in (1, -1)
                 if allow_reentry:
                     position = signal
                     entry_price = close_price
@@ -199,6 +218,8 @@ class BacktestEngine:
                     "pnl_value": pnl_value,
                     "trade_capital": trade_capital,
                     "exit_reason": "end_of_data",
+                    "exit_signal": str(rows.iloc[idx].get("exit_signal", "")),
+                    "exit_price": exit_price,
                     "balance_index": idx,
                 }
             )
@@ -238,5 +259,6 @@ class BacktestEngine:
             returns=net_returns_series,
             metrics=stats,
             trades=trades_df,
+            price_frame=rows,
         )
         return report

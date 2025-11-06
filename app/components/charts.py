@@ -48,6 +48,7 @@ def render_price_chart(df: pd.DataFrame) -> None:
         st.warning("시세 데이터가 비어 있어 차트를 표시할 수 없습니다.")
         return
     reduced_df, truncated = _downsample_ohlc(df, MAX_CANDLE_POINTS)
+
     fig = go.Figure(
         data=[
             go.Candlestick(
@@ -60,7 +61,60 @@ def render_price_chart(df: pd.DataFrame) -> None:
             )
         ]
     )
-    fig.update_layout(height=400, margin=dict(l=10, r=10, t=30, b=30))
+
+    if "close" in df.columns and "timestamp" in df.columns and ("signal" in df.columns or "position" in df.columns):
+        frame = df.sort_values("timestamp").reset_index(drop=True)
+        signals = frame["signal"].fillna(0).astype(int) if "signal" in frame else frame["position"].fillna(0).diff().fillna(0).astype(int)
+        entries = frame[signals > 0]
+        exits = frame[signals < 0]
+
+        if not entries.empty:
+            fig.add_trace(
+                go.Scatter(
+                    x=entries["timestamp"],
+                    y=entries["close"],
+                    mode="markers",
+                    marker=dict(symbol="triangle-up", size=9, color="#2ca02c"),
+                    name="롱 진입",
+                )
+            )
+        if not exits.empty:
+            fig.add_trace(
+                go.Scatter(
+                    x=exits["timestamp"],
+                    y=exits["close"],
+                    mode="markers",
+                    marker=dict(symbol="triangle-down", size=9, color="#d62728"),
+                    name="숏 진입",
+                )
+            )
+        if "exit_signal" in frame.columns:
+            close_events = frame[frame["exit_signal"].astype(str) != ""]
+            if not close_events.empty:
+                fig.add_trace(
+                    go.Scatter(
+                        x=close_events["timestamp"],
+                        y=close_events["close"],
+                        mode="markers",
+                        marker=dict(symbol="x", size=9, color="#ff7f0e"),
+                        name="포지션 청산",
+                    )
+                )
+        fig.add_trace(
+            go.Scatter(
+                x=reduced_df["timestamp"],
+                y=reduced_df["close"],
+                mode="lines",
+                line=dict(color="#1f77b4", width=1.2),
+                name="종가",
+            )
+        )
+
+    fig.update_layout(
+        title="가격 차트",
+        height=400,
+        margin=dict(l=10, r=10, t=50, b=30),
+    )
     st.plotly_chart(fig, use_container_width=True)
     if truncated:
         st.caption(f"차트는 약 {len(reduced_df)}개의 캔들로 축약해 표시합니다.")
@@ -81,7 +135,7 @@ def render_equity_curve(equity_curve: pd.Series) -> None:
             )
         ]
     )
-    fig.update_layout(height=300, margin=dict(l=10, r=10, t=30, b=30))
+    fig.update_layout(title="자산 곡선", height=300, margin=dict(l=10, r=10, t=50, b=30))
     st.plotly_chart(fig, use_container_width=True)
     if truncated:
         st.caption(f"자산 곡선은 약 {len(reduced_series)}개의 포인트로 축약해 표시합니다.")

@@ -106,19 +106,40 @@ class MA200StochRSIStrategy(BaseStrategy):
         result["signal"] = signals
 
         position = []
+        exit_signals = []
         current = 0
+        cooldown_active_col = "cooldown_active" in result.columns
         for _, row in result.iterrows():
-            if row["signal"] == 1:
+            exit_signal = ""
+            signal_value = int(row["signal"])
+
+            if signal_value == 1:
+                if current == -1:
+                    exit_signal = "reverse_to_long"
                 current = 1
-            elif row["signal"] == -1:
+            elif signal_value == -1:
+                if current == 1:
+                    exit_signal = "reverse_to_short"
                 current = -1
-            elif current == 1 and row["dead_cross"]:
-                current = 0
-            elif current == -1 and row["golden_cross"]:
-                current = 0
+            else:
+                if current == 1 and bool(row.get("dead_cross", False)):
+                    current = 0
+                    exit_signal = "dead_cross_exit"
+                elif current == -1 and bool(row.get("golden_cross", False)):
+                    current = 0
+                    exit_signal = "golden_cross_exit"
+                elif current != 0 and cooldown_active_col and bool(row.get("cooldown_active", False)):
+                    current = 0
+                    exit_signal = "cooldown_exit"
+                elif current != 0 and row.get("ma_bias", 0) == 0:
+                    current = 0
+                    exit_signal = "bias_neutral_exit"
+
             position.append(current)
+            exit_signals.append(exit_signal)
 
         result["position"] = position
+        result["exit_signal"] = exit_signals
         return result
 
     def calculate_position_size(self, capital: float, leverage: int) -> float:
