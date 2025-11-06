@@ -112,6 +112,7 @@ class MA200StochRSIStrategy(BaseStrategy):
         for _, row in result.iterrows():
             exit_signal = ""
             signal_value = int(row["signal"])
+            ma_bias_value = int(row.get("ma_bias", 0) or 0)
 
             if signal_value == 1:
                 if current == -1:
@@ -122,18 +123,14 @@ class MA200StochRSIStrategy(BaseStrategy):
                     exit_signal = "reverse_to_short"
                 current = -1
             else:
-                if current == 1 and bool(row.get("dead_cross", False)):
-                    current = 0
-                    exit_signal = "dead_cross_exit"
-                elif current == -1 and bool(row.get("golden_cross", False)):
-                    current = 0
-                    exit_signal = "golden_cross_exit"
-                elif current != 0 and cooldown_active_col and bool(row.get("cooldown_active", False)):
-                    current = 0
-                    exit_signal = "cooldown_exit"
-                elif current != 0 and row.get("ma_bias", 0) == 0:
-                    current = 0
-                    exit_signal = "bias_neutral_exit"
+                if current != 0:
+                    if ma_bias_value == 0:
+                        current = 0
+                        exit_signal = "ma_bias_neutral_exit"
+                    elif ma_bias_value != current:
+                        exit_signal = "ma_bias_flip_to_long" if ma_bias_value > 0 else "ma_bias_flip_to_short"
+                        current = 0
+                    # No additional exits; wait for TP/SL or MA bias change
 
             position.append(current)
             exit_signals.append(exit_signal)

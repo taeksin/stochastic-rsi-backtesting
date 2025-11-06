@@ -22,6 +22,7 @@ from src.backtesting.engine import BacktestEngine
 from src.strategy.ma200_stochrsi import MA200StochRSIStrategy, StrategyParameters
 from src.utils.logger_confg import get_logger
 from src.utils import storage
+from src.utils.excel_styles import style_trade_sheet
 
 logger = get_logger()
 
@@ -140,6 +141,9 @@ def format_trade_table(
         "strategy_exit_golden_cross": "스토캐스틱 골든크로스 재발생",
         "strategy_exit_cooldown": "MA 쿨다운 진행 중",
         "strategy_exit_ma_neutral": "MA 바이어스 중립화",
+        "ma_bias_flip_to_long": "MA 모드가 롱으로 전환",
+        "ma_bias_flip_to_short": "MA 모드가 숏으로 전환",
+        "ma_bias_neutral_exit": "MA 모드가 중립으로 전환",
         "strategy_exit_other": "전략 조건 해제",
         "strategy_exit": "전략 조건 해제",
         "end_of_data": "데이터 종료 시점",
@@ -160,6 +164,7 @@ def format_trade_table(
         "reverse": "포지션 반전",
         "strategy_exit": "전략 종료",
         "end_of_data": "데이터 종료",
+        "ma_bias_flip": "MA 모드 변경",
         "unknown": "기타",
     }
     if not exit_types.empty and reason_codes is not None:
@@ -174,6 +179,9 @@ def format_trade_table(
             "reverse_to_short": "reverse",
             "reverse": "reverse",
             "end_of_data": "end_of_data",
+            "ma_bias_flip_to_long": "ma_bias_flip",
+            "ma_bias_flip_to_short": "ma_bias_flip",
+            "ma_bias_neutral_exit": "ma_bias_flip",
         }
         inferred_types = reason_codes.fillna("").map(reason_to_type).fillna("")
         exit_types = exit_types.where(exit_types != "", inferred_types)
@@ -201,6 +209,12 @@ def format_trade_table(
                 detailed_reason.append(f"롱→숏 포지션 전환으로 인해서 포지션 종료 (가격 {format_price(price)})")
             else:
                 detailed_reason.append(f"반대 시그널로 포지션 종료 (가격 {format_price(price)})")
+        elif exit_type_value == "ma_bias_flip":
+            if code in {"ma_bias_flip_to_long", "ma_bias_flip_to_short"}:
+                desc = reason_labels.get(code)
+                detailed_reason.append(f"{desc}되어 기존 포지션 종료 (가격 {format_price(price)})")
+            else:
+                detailed_reason.append(f"MA 모드 변경으로 포지션 종료 (가격 {format_price(price)})")
         elif exit_type_value == "strategy_exit":
             desc = reason_labels.get(code)
             if not desc or desc == "전략 조건 해제":
@@ -270,21 +284,26 @@ def render_backtest_results(
     if display_df.empty:
         st.info("거래 내역이 없습니다.")
     else:
-        max_rows = 300
+        max_rows = 500
         total_rows = len(display_df)
         truncated_df = display_df.head(max_rows)
         if total_rows > max_rows:
             st.info(f"총 {total_rows}건 중 처음 {max_rows}건만 표에 표시합니다. 전체 내역은 아래에서 다운로드하세요.")
         st.dataframe(truncated_df, use_container_width=True, height=420)
 
-        csv_buffer = io.StringIO()
-        csv_buffer.write("\ufeff")
-        display_df.reset_index().rename(columns={"index": "No."}).to_csv(csv_buffer, index=False)
+        excel_buffer = io.BytesIO()
+        export_df = display_df.reset_index().rename(columns={"index": "No."})
+        with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
+            export_df.to_excel(writer, index=False, sheet_name="trades")
+            worksheet = writer.sheets["trades"]
+            worksheet.freeze_panes(1, 0)
+            style_trade_sheet(writer.book, worksheet, export_df)
+        excel_buffer.seek(0)
         st.download_button(
-            "전체 거래 CSV 다운로드",
-            csv_buffer.getvalue(),
-            file_name="trades.csv",
-            mime="text/csv",
+            "전체 거래 XLSX 다운로드",
+            data=excel_buffer,
+            file_name="trades.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
 
