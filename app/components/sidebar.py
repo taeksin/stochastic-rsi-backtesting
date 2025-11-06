@@ -50,8 +50,8 @@ def render_sidebar(
         min(default_position_capital, initial_capital) if initial_capital else default_position_capital
     )
 
-    today = date(2024, 12, 31)
-    default_start = date(2024, 1, 1)
+    today = date(2025, 11, 6)
+    default_start = date(2020, 3, 26)
 
     start_date = default_start
     end_date = today

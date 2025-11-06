@@ -207,19 +207,29 @@ class BacktestEngine:
             if not exit_flag and target == 0:
                 exit_flag = True
                 detail = str(context_row.get("exit_signal", ""))
-                if detail == "dead_cross_exit":
+                if detail in {"ma_bias_flip_to_long", "ma_bias_flip_to_short"}:
+                    exit_reason_code = detail
+                    exit_type = "ma_bias_flip"
+                elif detail == "ma_bias_neutral_exit":
+                    exit_reason_code = detail
+                    exit_type = "ma_bias_flip"
+                elif detail == "dead_cross_exit":
                     exit_reason_code = "strategy_exit_dead_cross"
+                    exit_type = "strategy_exit"
                 elif detail == "golden_cross_exit":
                     exit_reason_code = "strategy_exit_golden_cross"
+                    exit_type = "strategy_exit"
                 elif detail == "cooldown_exit":
                     exit_reason_code = "strategy_exit_cooldown"
+                    exit_type = "strategy_exit"
                 elif detail == "bias_neutral_exit":
                     exit_reason_code = "strategy_exit_ma_neutral"
+                    exit_type = "strategy_exit"
                 else:
                     exit_reason_code = "strategy_exit_other"
+                    exit_type = "strategy_exit"
                 exit_signal_value = detail or exit_reason_code
                 exit_price = close_price
-                exit_type = "strategy_exit"
             elif not exit_flag and target == -direction:
                 exit_flag = True
                 exit_reason_code = "reverse_to_long" if target > direction else "reverse_to_short"

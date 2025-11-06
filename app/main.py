@@ -140,6 +140,9 @@ def format_trade_table(
         "strategy_exit_golden_cross": "스토캐스틱 골든크로스 재발생",
         "strategy_exit_cooldown": "MA 쿨다운 진행 중",
         "strategy_exit_ma_neutral": "MA 바이어스 중립화",
+        "ma_bias_flip_to_long": "MA 모드가 롱으로 전환",
+        "ma_bias_flip_to_short": "MA 모드가 숏으로 전환",
+        "ma_bias_neutral_exit": "MA 모드가 중립으로 전환",
         "strategy_exit_other": "전략 조건 해제",
         "strategy_exit": "전략 조건 해제",
         "end_of_data": "데이터 종료 시점",
@@ -160,6 +163,7 @@ def format_trade_table(
         "reverse": "포지션 반전",
         "strategy_exit": "전략 종료",
         "end_of_data": "데이터 종료",
+        "ma_bias_flip": "MA 모드 변경",
         "unknown": "기타",
     }
     if not exit_types.empty and reason_codes is not None:
@@ -174,6 +178,9 @@ def format_trade_table(
             "reverse_to_short": "reverse",
             "reverse": "reverse",
             "end_of_data": "end_of_data",
+            "ma_bias_flip_to_long": "ma_bias_flip",
+            "ma_bias_flip_to_short": "ma_bias_flip",
+            "ma_bias_neutral_exit": "ma_bias_flip",
         }
         inferred_types = reason_codes.fillna("").map(reason_to_type).fillna("")
         exit_types = exit_types.where(exit_types != "", inferred_types)
@@ -201,6 +208,12 @@ def format_trade_table(
                 detailed_reason.append(f"롱→숏 포지션 전환으로 인해서 포지션 종료 (가격 {format_price(price)})")
             else:
                 detailed_reason.append(f"반대 시그널로 포지션 종료 (가격 {format_price(price)})")
+        elif exit_type_value == "ma_bias_flip":
+            if code in {"ma_bias_flip_to_long", "ma_bias_flip_to_short"}:
+                desc = reason_labels.get(code)
+                detailed_reason.append(f"{desc}되어 기존 포지션 종료 (가격 {format_price(price)})")
+            else:
+                detailed_reason.append(f"MA 모드 변경으로 포지션 종료 (가격 {format_price(price)})")
         elif exit_type_value == "strategy_exit":
             desc = reason_labels.get(code)
             if not desc or desc == "전략 조건 해제":
