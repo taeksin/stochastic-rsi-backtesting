@@ -65,6 +65,7 @@ def format_trade_table(
         "손익 (₩)",
         "투입 자본 (₩)",
         "진입가 (₩)",
+        "진입 MA 값",
         "청산가 (₩)",
         "손절 기준 (₩)",
         "익절 기준 (₩)",
@@ -101,6 +102,7 @@ def format_trade_table(
     balance = pd.to_numeric(df.get("balance"), errors="coerce") if "balance" in df else pd.Series(0, index=df.index)
     exit_price = pd.to_numeric(df.get("exit_price"), errors="coerce") if "exit_price" in df else pd.Series(np.nan, index=df.index)
     entry_price = pd.to_numeric(df.get("entry_price"), errors="coerce") if "entry_price" in df else pd.Series(np.nan, index=df.index)
+    entry_ma_value = pd.to_numeric(df.get("entry_ma_value"), errors="coerce") if "entry_ma_value" in df else pd.Series(np.nan, index=df.index)
     reason_codes = df.get("exit_reason") if "exit_reason" in df else pd.Series("", index=df.index)
     signal_codes = df.get("exit_signal") if "exit_signal" in df else pd.Series("", index=df.index)
     exit_types = df.get("exit_type") if "exit_type" in df else pd.Series("", index=df.index)
@@ -226,6 +228,7 @@ def format_trade_table(
             "손익 (₩)": pnl_value.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
             "투입 자본 (₩)": capital_used.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
             "진입가 (₩)": entry_price.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
+            "진입 MA 값": entry_ma_value.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
             "청산가 (₩)": exit_price.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
             "손절 기준 (₩)": stop_loss_target.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
             "익절 기준 (₩)": take_profit_target.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
