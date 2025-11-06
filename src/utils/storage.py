@@ -73,6 +73,7 @@ def save_backtest_result(
     expected_columns = [
         "entry_index",
         "entry_time",
+        "entry_price",
         "exit_index",
         "exit_time",
         "direction",
@@ -83,6 +84,9 @@ def save_backtest_result(
         "trade_capital",
         "exit_signal",
         "exit_price",
+        "exit_type",
+        "take_profit_price",
+        "stop_loss_price",
     ]
 
     trades_records: List[Dict[str, Any]] = []
@@ -228,6 +232,14 @@ def load_trades_csv(metadata: Dict[str, Any]) -> pd.DataFrame:
             df["exit_signal"] = df["exit_signal"].fillna("").astype(str)
         if "exit_price" in df.columns:
             df["exit_price"] = pd.to_numeric(df["exit_price"], errors="coerce")
+        if "entry_price" in df.columns:
+            df["entry_price"] = pd.to_numeric(df["entry_price"], errors="coerce")
+        if "exit_type" in df.columns:
+            df["exit_type"] = df["exit_type"].fillna("").astype(str)
+        if "take_profit_price" in df.columns:
+            df["take_profit_price"] = pd.to_numeric(df["take_profit_price"], errors="coerce")
+        if "stop_loss_price" in df.columns:
+            df["stop_loss_price"] = pd.to_numeric(df["stop_loss_price"], errors="coerce")
         if "trade_capital" in df.columns:
             df["trade_capital"] = pd.to_numeric(df["trade_capital"], errors="coerce")
         if "pnl_value" in df.columns:

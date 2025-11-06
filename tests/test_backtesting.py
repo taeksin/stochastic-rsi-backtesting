@@ -103,7 +103,12 @@ def test_take_profit_applies_leverage_and_fees():
     )
 
     trade = report.trades.iloc[0]
-    assert trade["exit_reason"] == "take_profit"
+    assert trade["exit_type"] == "take_profit"
+    assert trade["exit_reason"] == "take_profit_long"
+    assert pytest.approx(trade["entry_price"], rel=1e-9) == 100.0
+    assert pytest.approx(trade["exit_price"], rel=1e-9) == pytest.approx(trade["take_profit_price"], rel=1e-9)
+    assert pytest.approx(trade["take_profit_price"], rel=1e-9) == 105.0
+    assert pytest.approx(trade["stop_loss_price"], rel=1e-9) == 98.0
     assert pytest.approx(trade["pnl_value"], rel=1e-4) == 9.84
     assert pytest.approx(report.metrics["final_equity"], rel=1e-4) == 1009.84
 
@@ -134,6 +139,11 @@ def test_stop_loss_applies_leverage_and_fees():
     )
 
     trade = report.trades.iloc[0]
-    assert trade["exit_reason"] == "stop_loss"
+    assert trade["exit_type"] == "stop_loss"
+    assert trade["exit_reason"] == "stop_loss_short"
+    assert pytest.approx(trade["entry_price"], rel=1e-9) == 100.0
+    assert pytest.approx(trade["exit_price"], rel=1e-9) == pytest.approx(trade["stop_loss_price"], rel=1e-9)
+    assert pytest.approx(trade["stop_loss_price"], rel=1e-9) == 103.0
+    assert pytest.approx(trade["take_profit_price"], rel=1e-9) == 95.0
     assert pytest.approx(trade["pnl_value"], rel=1e-4) == -18.48
     assert pytest.approx(report.metrics["final_equity"], rel=1e-4) == 981.52

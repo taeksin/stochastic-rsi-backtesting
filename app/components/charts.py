@@ -109,6 +109,31 @@ def render_price_chart(df: pd.DataFrame) -> None:
                 name="종가",
             )
         )
+        if {"engine_exit_type", "engine_exit_price"}.issubset(frame.columns):
+            engine_events = frame[pd.notna(frame["engine_exit_price"])]
+            if not engine_events.empty:
+                tp_events = engine_events[engine_events["engine_exit_type"] == "take_profit"]
+                sl_events = engine_events[engine_events["engine_exit_type"] == "stop_loss"]
+                if not tp_events.empty:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=tp_events["timestamp"],
+                            y=tp_events["engine_exit_price"],
+                            mode="markers",
+                            marker=dict(symbol="circle", size=8, color="#17becf"),
+                            name="익절 청산",
+                        )
+                    )
+                if not sl_events.empty:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=sl_events["timestamp"],
+                            y=sl_events["engine_exit_price"],
+                            mode="markers",
+                            marker=dict(symbol="x", size=8, color="#d62728"),
+                            name="손절 청산",
+                        )
+                    )
 
     fig.update_layout(
         title="가격 차트",
