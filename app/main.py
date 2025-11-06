@@ -19,6 +19,8 @@ import streamlit as st
 from app.components import charts, metrics_display, sidebar
 from config.settings import settings
 from src.backtesting.engine import BacktestEngine
+from src.data.bybit_client import fetch_bybit_klines
+from src.data.resampler import KlineResampler
 from src.strategy.ma200_stochrsi import MA200StochRSIStrategy, StrategyParameters
 from src.utils.logger_confg import get_logger
 from src.utils import storage
@@ -27,25 +29,103 @@ from src.utils.excel_styles import style_trade_sheet
 logger = get_logger()
 
 
-def generate_mock_data(
-    start: datetime, end: datetime, timeframe: str, seed: int = 42
+SUPPORTED_INTERVALS = {"1", "3", "5", "15", "30", "60", "120", "240", "360", "720", "1440"}
+
+
+def _timeframe_to_minutes(value: str) -> int:
+    upper = value.strip().upper()
+    if upper.endswith("T"):
+        return int(upper[:-1])
+    if upper.endswith("H"):
+        return int(float(upper[:-1]) * 60)
+    if upper.endswith("D"):
+        return int(float(upper[:-1]) * 60 * 24)
+    return int(upper)
+
+
+def _select_fetch_interval(minutes: int) -> str:
+    if minutes <= 0:
+        return "1"
+    supported = sorted(int(item) for item in SUPPORTED_INTERVALS)
+    if minutes in supported:
+        return str(minutes)
+    divisors = [value for value in supported if value <= minutes and minutes % value == 0]
+    if divisors:
+        return str(max(divisors))
+    return "1"
+
+
+def load_price_data(
+    start: datetime,
+    end: datetime,
+    timeframe: str,
+    *,
+    symbol: str = "BTCUSDT",
+    category: str = "linear",
 ) -> pd.DataFrame:
-    rng = np.random.default_rng(seed)
-    index = pd.date_range(start=start, end=end, freq=timeframe)
-    steps = rng.normal(loc=0, scale=0.002, size=len(index))
-    price = 20000 + np.cumsum(steps) * 20000
-    price = np.maximum(price, 1000)
-    df = pd.DataFrame(
-        {
-            "timestamp": index,
-            "open": price,
-            "high": price * (1 + rng.uniform(0, 0.002, len(index))),
-            "low": price * (1 - rng.uniform(0, 0.002, len(index))),
-            "close": price * (1 + rng.normal(0, 0.001, len(index))),
-            "volume": rng.uniform(10, 100, len(index)),
-        }
+    minutes = _timeframe_to_minutes(timeframe)
+    interval = str(minutes)
+    fetch_interval = _select_fetch_interval(minutes)
+
+    progress_placeholder = None
+    progress_bar = None
+    try:
+        progress_placeholder = st.empty()
+        progress_bar = progress_placeholder.progress(0.0)
+    except Exception:  # Streamlit context unavailable
+        progress_placeholder = None
+        progress_bar = None
+
+    def _update_progress(completed: int, total: int) -> None:
+        if progress_bar is None or total <= 0:
+            return
+        fraction = min(completed / total, 1.0)
+        progress_bar.progress(fraction)
+
+    try:
+        fetched = fetch_bybit_klines(
+            start=start,
+            end=end,
+            interval_minutes=fetch_interval,
+            symbol=symbol,
+            category=category,
+            show_progress=False,
+            sequential=True,
+            progress_hook=_update_progress,
+        )
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.exception("Failed to fetch Bybit price data", exc_info=exc)
+        if progress_placeholder is not None:
+            progress_placeholder.empty()
+        return pd.DataFrame()
+
+    if fetched.empty:
+        if progress_placeholder is not None:
+            progress_placeholder.empty()
+        return fetched
+
+    price_df = fetched.copy()
+    if fetch_interval != interval:
+        try:
+            resampled = KlineResampler.resample_to_timeframe(price_df, timeframe.upper())
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.exception("Failed to resample fetched data; falling back to raw resolution", exc_info=exc)
+            resampled = price_df.copy()
+        price_df = resampled
+
+    price_df = price_df.drop(
+        columns=[col for col in price_df.columns if col not in {"timestamp", "open", "high", "low", "close", "volume"}],
+        errors="ignore",
     )
-    return df
+    price_df["timestamp"] = pd.to_datetime(price_df["timestamp"], errors="coerce")
+    price_df["timestamp"] = price_df["timestamp"].dt.tz_localize(None)
+    for column in ["open", "high", "low", "close", "volume"]:
+        if column in price_df.columns:
+            price_df[column] = pd.to_numeric(price_df[column], errors="coerce")
+    price_df = price_df.dropna(subset=["timestamp", "open", "high", "low", "close"])
+    if progress_placeholder is not None:
+        progress_placeholder.empty()
+    return price_df.sort_values("timestamp").reset_index(drop=True)
 
 
 def format_trade_table(
@@ -462,21 +542,7 @@ def main() -> None:
 
 
     data_start = datetime.combine(state.start_date, datetime.min.time())
-    data_end = datetime.combine(state.end_date, datetime.min.time())
-
-    price_df = generate_mock_data(data_start, data_end, state.timeframe)
-
-    strategy_params = StrategyParameters(
-        ma_period=state.ma_period,
-        rsi_period=state.rsi_period,
-        stoch_period=state.stoch_period,
-        stoch_k=state.stoch_k,
-        stoch_d=state.stoch_d,
-        cooldown_minutes=state.ma_cooldown_minutes,
-    )
-    strategy = MA200StochRSIStrategy(params=strategy_params)
-    engine = BacktestEngine()
-    engine.default_trade_capital = state.position_capital
+    data_end = datetime.combine(state.end_date, datetime.max.time())
 
     if not state.run_backtest:
         st.info("사이드바에서 파라미터를 설정한 뒤 '백테스트 실행' 버튼을 눌러주세요.")
@@ -532,6 +598,23 @@ def main() -> None:
             )
         )
         return
+
+    price_df = load_price_data(data_start, data_end, state.timeframe)
+    if price_df.empty:
+        st.error("Bybit API에서 가격 데이터를 불러오지 못했습니다. 네트워크 상태와 날짜 범위를 확인해주세요.")
+        return
+
+    strategy_params = StrategyParameters(
+        ma_period=state.ma_period,
+        rsi_period=state.rsi_period,
+        stoch_period=state.stoch_period,
+        stoch_k=state.stoch_k,
+        stoch_d=state.stoch_d,
+        cooldown_minutes=state.ma_cooldown_minutes,
+    )
+    strategy = MA200StochRSIStrategy(params=strategy_params)
+    engine = BacktestEngine()
+    engine.default_trade_capital = state.position_capital
 
     logger.info(
         "Backtest start | %s ~ %s | timeframe %s | leverage x%d | TP %.2f%% | SL %.2f%% | cooldown %d min",

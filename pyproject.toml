@@ -19,8 +19,10 @@ dependencies = [
   "python-dotenv==1.0.0",
   "pytz==2023.3",
   "sqlalchemy==2.0.23",
+  "requests==2.31.0",
   "streamlit==1.29.0",
   "xlsxwriter>=3.2.9",
+  "tqdm==4.66.1",
 ]
 
 [project.optional-dependencies]
