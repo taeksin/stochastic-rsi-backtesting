@@ -75,6 +75,7 @@ def save_backtest_result(
         "entry_time",
         "entry_price",
         "entry_ma_value",
+        "entry_rsi",
         "exit_index",
         "exit_time",
         "direction",
@@ -237,6 +238,8 @@ def load_trades_csv(metadata: Dict[str, Any]) -> pd.DataFrame:
             df["entry_price"] = pd.to_numeric(df["entry_price"], errors="coerce")
         if "entry_ma_value" in df.columns:
             df["entry_ma_value"] = pd.to_numeric(df["entry_ma_value"], errors="coerce")
+        if "entry_rsi" in df.columns:
+            df["entry_rsi"] = pd.to_numeric(df["entry_rsi"], errors="coerce")
         if "exit_type" in df.columns:
             df["exit_type"] = df["exit_type"].fillna("").astype(str)
         if "take_profit_price" in df.columns:

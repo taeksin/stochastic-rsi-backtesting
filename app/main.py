@@ -128,33 +128,43 @@ def load_price_data(
     return price_df.sort_values("timestamp").reset_index(drop=True)
 
 
+
+
 def format_trade_table(
     trades_df: pd.DataFrame,
     take_profit_pct: Optional[float] = None,
     stop_loss_pct: Optional[float] = None,
-) -> pd.DataFrame:
+    *,
+    return_export: bool = False,
+) -> pd.DataFrame | tuple[pd.DataFrame, pd.DataFrame]:
     if take_profit_pct is not None and take_profit_pct > 1:
         take_profit_pct = take_profit_pct / 100
     if stop_loss_pct is not None and stop_loss_pct > 1:
         stop_loss_pct = stop_loss_pct / 100
+
     columns = [
         "진입 시각",
         "청산 시각",
         "포지션",
         "청산 유형",
         "수익률(%)",
-        "손익 (₩)",
+        "수익 (₩)",
         "투입 자본 (₩)",
         "진입가 (₩)",
         "진입 MA 값",
+        "진입 RSI",
         "청산가 (₩)",
         "손절 기준 (₩)",
         "익절 기준 (₩)",
         "잔액 (₩)",
         "종료 사유",
     ]
+
     if trades_df is None or trades_df.empty:
-        return pd.DataFrame(columns=columns)
+        empty_df = pd.DataFrame(columns=columns)
+        if return_export:
+            return empty_df, empty_df.copy()
+        return empty_df
 
     df = trades_df.copy()
 
@@ -162,59 +172,46 @@ def format_trade_table(
         pd.to_datetime(df.get("entry_time"), errors="coerce")
         if "entry_time" in df
         else pd.Series(pd.NaT, index=df.index)
-    )
+    ).dt.tz_localize(None)
     exit_time = (
         pd.to_datetime(df.get("exit_time"), errors="coerce")
         if "exit_time" in df
         else pd.Series(pd.NaT, index=df.index)
-    )
-    entry_time = entry_time.dt.tz_localize(None)
-    exit_time = exit_time.dt.tz_localize(None)
+    ).dt.tz_localize(None)
 
-    raw_direction = df["direction"].fillna("") if "direction" in df else pd.Series("", index=df.index)
-    raw_direction = raw_direction.astype(str)
+    raw_direction = df.get("direction", pd.Series("", index=df.index)).fillna("").astype(str)
     direction = raw_direction.map({"long": "롱", "short": "숏"}).fillna(raw_direction)
     lower_direction = raw_direction.str.lower()
 
-    pnl_pct = pd.to_numeric(df.get("pnl_pct"), errors="coerce") if "pnl_pct" in df else pd.Series(0, index=df.index)
-    pnl_pct = pnl_pct * 100
-    pnl_value = pd.to_numeric(df.get("pnl_value"), errors="coerce") if "pnl_value" in df else pd.Series(0, index=df.index)
-    capital_used = pd.to_numeric(df.get("trade_capital"), errors="coerce") if "trade_capital" in df else pd.Series(0, index=df.index)
-    balance = pd.to_numeric(df.get("balance"), errors="coerce") if "balance" in df else pd.Series(0, index=df.index)
+    pnl_pct = pd.to_numeric(df.get("pnl_pct"), errors="coerce") if "pnl_pct" in df else pd.Series(0.0, index=df.index)
+    pnl_value = pd.to_numeric(df.get("pnl_value"), errors="coerce") if "pnl_value" in df else pd.Series(0.0, index=df.index)
+    capital_used = pd.to_numeric(df.get("trade_capital"), errors="coerce") if "trade_capital" in df else pd.Series(0.0, index=df.index)
+    balance = pd.to_numeric(df.get("balance"), errors="coerce") if "balance" in df else pd.Series(0.0, index=df.index)
     exit_price = pd.to_numeric(df.get("exit_price"), errors="coerce") if "exit_price" in df else pd.Series(np.nan, index=df.index)
     entry_price = pd.to_numeric(df.get("entry_price"), errors="coerce") if "entry_price" in df else pd.Series(np.nan, index=df.index)
     entry_ma_value = pd.to_numeric(df.get("entry_ma_value"), errors="coerce") if "entry_ma_value" in df else pd.Series(np.nan, index=df.index)
-    reason_codes = df.get("exit_reason") if "exit_reason" in df else pd.Series("", index=df.index)
-    signal_codes = df.get("exit_signal") if "exit_signal" in df else pd.Series("", index=df.index)
-    exit_types = df.get("exit_type") if "exit_type" in df else pd.Series("", index=df.index)
-    exit_types = exit_types.fillna("").astype(str)
-    take_profit_target = (
-        pd.to_numeric(df.get("take_profit_price"), errors="coerce") if "take_profit_price" in df else pd.Series(np.nan, index=df.index)
-    )
-    stop_loss_target = (
-        pd.to_numeric(df.get("stop_loss_price"), errors="coerce") if "stop_loss_price" in df else pd.Series(np.nan, index=df.index)
-    )
-    if take_profit_pct is not None and not pd.isna(take_profit_pct):
-        if take_profit_target.isna().any():
-            tp_fallback = np.where(
-                lower_direction == "short",
-                entry_price * (1 - take_profit_pct),
-                entry_price * (1 + take_profit_pct),
-            )
-            fallback_series = pd.Series(tp_fallback, index=df.index)
-            take_profit_target = take_profit_target.where(take_profit_target.notna(), fallback_series)
-    if stop_loss_pct is not None and not pd.isna(stop_loss_pct):
-        if stop_loss_target.isna().any():
-            sl_fallback = np.where(
-                lower_direction == "short",
-                entry_price * (1 + stop_loss_pct),
-                entry_price * (1 - stop_loss_pct),
-            )
-            fallback_series = pd.Series(sl_fallback, index=df.index)
-            stop_loss_target = stop_loss_target.where(stop_loss_target.notna(), fallback_series)
+    entry_rsi = pd.to_numeric(df.get("entry_rsi"), errors="coerce") if "entry_rsi" in df else pd.Series(np.nan, index=df.index)
+    reason_codes = df.get("exit_reason", pd.Series("", index=df.index)).fillna("").astype(str)
+    signal_codes = df.get("exit_signal", pd.Series("", index=df.index)).fillna("").astype(str)
+    exit_types = df.get("exit_type", pd.Series("", index=df.index)).fillna("").astype(str)
+    take_profit_target = pd.to_numeric(df.get("take_profit_price"), errors="coerce") if "take_profit_price" in df else pd.Series(np.nan, index=df.index)
+    stop_loss_target = pd.to_numeric(df.get("stop_loss_price"), errors="coerce") if "stop_loss_price" in df else pd.Series(np.nan, index=df.index)
 
-    def format_price(value: float) -> str:
-        return f"{value:,.0f}" if pd.notna(value) else "N/A"
+    if take_profit_pct is not None and not pd.isna(take_profit_pct) and take_profit_target.isna().any():
+        tp_fallback = np.where(
+            lower_direction == "short",
+            entry_price * (1 - take_profit_pct),
+            entry_price * (1 + take_profit_pct),
+        )
+        take_profit_target = take_profit_target.where(take_profit_target.notna(), pd.Series(tp_fallback, index=df.index))
+
+    if stop_loss_pct is not None and not pd.isna(stop_loss_pct) and stop_loss_target.isna().any():
+        sl_fallback = np.where(
+            lower_direction == "short",
+            entry_price * (1 + stop_loss_pct),
+            entry_price * (1 - stop_loss_pct),
+        )
+        stop_loss_target = stop_loss_target.where(stop_loss_target.notna(), pd.Series(sl_fallback, index=df.index))
 
     reason_labels = {
         "strategy_exit_dead_cross": "스토캐스틱 데드크로스 재발생",
@@ -224,114 +221,191 @@ def format_trade_table(
         "ma_bias_flip_to_long": "MA 모드가 롱으로 전환",
         "ma_bias_flip_to_short": "MA 모드가 숏으로 전환",
         "ma_bias_neutral_exit": "MA 모드가 중립으로 전환",
-        "strategy_exit_other": "전략 조건 해제",
-        "strategy_exit": "전략 조건 해제",
-        "end_of_data": "데이터 종료 시점",
-        "unknown_exit": "기타 종료",
+        "reverse_to_long": "숏 → 롱 전환",
+        "reverse_to_short": "롱 → 숏 전환",
+        "strategy_exit_other": "전략 종료 (기타)",
+        "take_profit_long": "롱 포지션 익절",
+        "take_profit_short": "숏 포지션 익절",
+        "stop_loss_long": "롱 포지션 손절",
+        "stop_loss_short": "숏 포지션 손절",
     }
     signal_labels = {
-        "dead_cross_exit": "스토캐스틱 데드크로스 재발생",
-        "golden_cross_exit": "스토캐스틱 골든크로스 재발생",
-        "cooldown_exit": "MA 쿨다운 진행 중",
-        "bias_neutral_exit": "MA 바이어스 중립화",
-        "reverse_to_long": "반대 신호 도착 (롱)",
-        "reverse_to_short": "반대 신호 도착 (숏)",
-        "reverse": "반대 신호 도착",
+        "dead_cross_exit": "스토캐스틱 데드크로스",
+        "golden_cross_exit": "스토캐스틱 골든크로스",
+        "cooldown_exit": "MA 쿨다운",
+        "bias_neutral_exit": "MA 바이어스 중립",
     }
     exit_type_labels = {
         "take_profit": "익절",
         "stop_loss": "손절",
-        "reverse": "포지션 반전",
         "strategy_exit": "전략 종료",
+        "reverse": "포지션 전환",
         "end_of_data": "데이터 종료",
-        "ma_bias_flip": "MA 모드 변경",
-        "unknown": "기타",
+        "ma_bias_flip": "MA 모드 전환",
     }
-    if not exit_types.empty and reason_codes is not None:
-        reason_to_type = {
-            "take_profit": "take_profit",
-            "take_profit_long": "take_profit",
-            "take_profit_short": "take_profit",
-            "stop_loss": "stop_loss",
-            "stop_loss_long": "stop_loss",
-            "stop_loss_short": "stop_loss",
-            "reverse_to_long": "reverse",
-            "reverse_to_short": "reverse",
-            "reverse": "reverse",
-            "end_of_data": "end_of_data",
-            "ma_bias_flip_to_long": "ma_bias_flip",
-            "ma_bias_flip_to_short": "ma_bias_flip",
-            "ma_bias_neutral_exit": "ma_bias_flip",
-        }
-        inferred_types = reason_codes.fillna("").map(reason_to_type).fillna("")
-        exit_types = exit_types.where(exit_types != "", inferred_types)
-    exit_type_display = exit_types.map(exit_type_labels)
-    exit_type_display = exit_type_display.where(exit_type_display.notna(), exit_types)
-    exit_type_display = exit_type_display.replace("", "-")
 
-    detailed_reason = []
-    for code, price, signal, raw_dir, exit_type_value in zip(
-        reason_codes.fillna(""),
-        exit_price,
-        signal_codes.fillna(""),
-        raw_direction.fillna(""),
-        exit_types,
-    ):
-        if exit_type_value == "take_profit" or code in {"take_profit", "take_profit_long", "take_profit_short"}:
-            detailed_reason.append(f"익절가 {format_price(price)}에 도달하여 포지션 종료")
-        elif exit_type_value == "stop_loss" or code in {"stop_loss", "stop_loss_long", "stop_loss_short"}:
-            detailed_reason.append(f"손절가 {format_price(price)}에 도달하여 포지션 종료")
-        elif exit_type_value == "reverse" or code in {"reverse_to_long", "reverse_to_short", "reverse"}:
-            lower_dir = str(raw_dir).lower()
-            if lower_dir == "long":
-                detailed_reason.append(f"숏→롱 포지션 전환으로 인해서 포지션 종료 (가격 {format_price(price)})")
-            elif lower_dir == "short":
-                detailed_reason.append(f"롱→숏 포지션 전환으로 인해서 포지션 종료 (가격 {format_price(price)})")
-            else:
-                detailed_reason.append(f"반대 시그널로 포지션 종료 (가격 {format_price(price)})")
-        elif exit_type_value == "ma_bias_flip":
-            if code in {"ma_bias_flip_to_long", "ma_bias_flip_to_short"}:
-                desc = reason_labels.get(code)
-                detailed_reason.append(f"{desc}되어 기존 포지션 종료 (가격 {format_price(price)})")
-            else:
-                detailed_reason.append(f"MA 모드 변경으로 포지션 종료 (가격 {format_price(price)})")
-        elif exit_type_value == "strategy_exit":
+    def format_price(value: float) -> str:
+        return f"{value:,.0f}" if pd.notna(value) else "N/A"
+
+    exit_type_display: list[str] = []
+    detailed_reason: list[str] = []
+    for idx, exit_type_value in exit_types.items():
+        code = reason_codes.iloc[idx]
+        signal = signal_codes.iloc[idx]
+        price = exit_price.iloc[idx]
+        exit_label = exit_type_labels.get(exit_type_value, "기타")
+        exit_type_display.append(exit_label)
+
+        if exit_type_value == "take_profit":
+            desc = reason_labels.get(code, "목표가 도달")
+            detailed_reason.append(f"{desc} (가격 {format_price(price)})")
+        elif exit_type_value == "stop_loss":
+            desc = reason_labels.get(code, "손절가 도달")
+            detailed_reason.append(f"{desc} (가격 {format_price(price)})")
+        elif exit_type_value == "reverse":
+            desc = reason_labels.get(code, "반대 포지션 전환")
+            detailed_reason.append(f"{desc} (가격 {format_price(price)})")
+        elif exit_type_value in {"strategy_exit", "ma_bias_flip"}:
             desc = reason_labels.get(code)
-            if not desc or desc == "전략 조건 해제":
-                desc = signal_labels.get(signal, desc or "전략 조건 해제")
-            detailed_reason.append(f"{desc}으로 포지션 종료 (가격 {format_price(price)})")
+            if not desc or desc == "전략 종료 (기타)":
+                desc = signal_labels.get(signal, desc or "전략 종료")
+            detailed_reason.append(f"{desc} (가격 {format_price(price)})")
         elif exit_type_value == "end_of_data":
             detailed_reason.append(f"데이터 종료 시점 도달 (가격 {format_price(price)})")
         else:
-            fallback = {
-                "strategy_exit_dead_cross": "스토캐스틱 데드크로스 재발생",
-                "strategy_exit_golden_cross": "스토캐스틱 골든크로스 재발생",
-                "strategy_exit_cooldown": "MA 쿨다운 진행 중",
-                "strategy_exit_ma_neutral": "MA 바이어스 중립화",
-            }.get(code, code if code else "-")
+            fallback = reason_labels.get(code, code if code else "-")
             detailed_reason.append(f"{fallback} (가격 {format_price(price)})")
-    reason = pd.Series(detailed_reason, index=df.index)
 
-    formatted = pd.DataFrame(
+    reason_series = pd.Series(detailed_reason, index=df.index)
+
+    export_df = pd.DataFrame(
         {
-            "진입 시각": entry_time.dt.strftime("%Y-%m-%d %H:%M"),
-            "청산 시각": exit_time.dt.strftime("%Y-%m-%d %H:%M"),
+            "진입 시각": entry_time,
+            "청산 시각": exit_time,
             "포지션": direction,
             "청산 유형": exit_type_display,
-            "수익률(%)": pnl_pct.map(lambda x: f"{x:.2f}" if pd.notna(x) else "N/A"),
-            "손익 (₩)": pnl_value.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
-            "투입 자본 (₩)": capital_used.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
-            "진입가 (₩)": entry_price.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
-            "진입 MA 값": entry_ma_value.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
-            "청산가 (₩)": exit_price.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
-            "손절 기준 (₩)": stop_loss_target.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
-            "익절 기준 (₩)": take_profit_target.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
-            "잔액 (₩)": balance.map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A"),
-            "종료 사유": reason,
+            "수익률(%)": pnl_pct,
+            "수익 (₩)": pnl_value,
+            "투입 자본 (₩)": capital_used,
+            "진입가 (₩)": entry_price,
+            "진입 MA 값": entry_ma_value,
+            "진입 RSI": entry_rsi,
+            "청산가 (₩)": exit_price,
+            "손절 기준 (₩)": stop_loss_target,
+            "익절 기준 (₩)": take_profit_target,
+            "잔액 (₩)": balance,
+            "종료 사유": reason_series,
         }
-    )
+    )[columns]
+
+    formatted = export_df.copy()
+    formatted["진입 시각"] = formatted["진입 시각"].dt.strftime("%Y-%m-%d %H:%M")
+    formatted["청산 시각"] = formatted["청산 시각"].dt.strftime("%Y-%m-%d %H:%M")
+    formatted["수익률(%)"] = formatted["수익률(%)"].map(lambda x: f"{x * 100:.2f}" if pd.notna(x) else "N/A")
+
+    money_columns = [
+        "수익 (₩)",
+        "투입 자본 (₩)",
+        "진입가 (₩)",
+        "진입 MA 값",
+        "청산가 (₩)",
+        "손절 기준 (₩)",
+        "익절 기준 (₩)",
+        "잔액 (₩)",
+    ]
+    for col in money_columns:
+        formatted[col] = formatted[col].map(lambda x: f"{x:,.0f}" if pd.notna(x) else "N/A")
+
+    formatted["진입 RSI"] = formatted["진입 RSI"].map(lambda x: f"{x:.2f}" if pd.notna(x) else "N/A")
     formatted.index = formatted.index + 1
+
+    if return_export:
+        return formatted, export_df
     return formatted
+
+
+def _build_summary_sheet(
+    context: Optional[Dict[str, Any]],
+    metrics: Dict[str, Any],
+    initial_capital: float,
+    position_capital: float,
+    take_profit_pct: float,
+    stop_loss_pct: float,
+    ma_cooldown_minutes: int,
+    price_df: pd.DataFrame,
+) -> pd.DataFrame:
+    def _format_percent(value: Optional[float]) -> str:
+        if value is None or (isinstance(value, float) and np.isnan(value)):
+            return "-"
+        return f"{value * 100:.2f}%"
+
+    def _format_number(value: Optional[float]) -> str:
+        if value is None or (isinstance(value, float) and np.isnan(value)):
+            return "-"
+        return f"{value:,.0f}"
+
+    def _format_datetime_str(value: Optional[str | pd.Timestamp]) -> str:
+        if value is None:
+            return "-"
+        if isinstance(value, pd.Timestamp):
+            if pd.isna(value):
+                return "-"
+            return value.strftime("%Y-%m-%d %H:%M")
+        return str(value)
+
+    params = context.get("parameters", {}) if context else {}
+    settings_ctx = context.get("settings", {}) if context else {}
+    strategy_ctx = context.get("strategy", {}) if context else {}
+
+    timeframe_value = params.get("timeframe") or settings_ctx.get("timeframe")
+    if not timeframe_value:
+        timeframe_value = "-"
+    start_value = params.get("start_date")
+    end_value = params.get("end_date")
+    if start_value is None and "timestamp" in price_df.columns and not price_df.empty:
+        start_value = pd.to_datetime(price_df["timestamp"], errors="coerce").dropna().min()
+    if end_value is None and "timestamp" in price_df.columns and not price_df.empty:
+        end_value = pd.to_datetime(price_df["timestamp"], errors="coerce").dropna().max()
+
+    rows: list[dict[str, str]] = []
+    rows.extend(
+        [
+            {"구분": "설정", "항목": "시작일", "값": _format_datetime_str(start_value)},
+            {"구분": "설정", "항목": "종료일", "값": _format_datetime_str(end_value)},
+            {"구분": "설정", "항목": "타임프레임", "값": str(timeframe_value)},
+            {"구분": "설정", "항목": "초기 자본 (₩)", "값": _format_number(initial_capital)},
+            {"구분": "설정", "항목": "거래당 투입 자본 (₩)", "값": _format_number(position_capital)},
+            {"구분": "설정", "항목": "레버리지", "값": f"x{settings_ctx.get('leverage', '-') or '-'}"},
+            {"구분": "설정", "항목": "익절 기준 (%)", "값": _format_percent(take_profit_pct)},
+            {"구분": "설정", "항목": "손절 기준 (%)", "값": _format_percent(stop_loss_pct)},
+            {"구분": "설정", "항목": "MA 쿨다운 (분)", "값": str(ma_cooldown_minutes)},
+            {"구분": "설정", "항목": "MA 기간", "값": str(strategy_ctx.get("ma_period", "-"))},
+            {"구분": "설정", "항목": "RSI 기간", "값": str(strategy_ctx.get("rsi_period", "-"))},
+            {"구분": "설정", "항목": "Stochastic 기간", "값": str(strategy_ctx.get("stoch_period", "-"))},
+            {"구분": "설정", "항목": "Stoch K", "값": str(strategy_ctx.get("stoch_k", "-"))},
+            {"구분": "설정", "항목": "Stoch D", "값": str(strategy_ctx.get("stoch_d", "-"))},
+        ]
+    )
+
+    total_return = metrics.get("total_return")
+    max_drawdown = metrics.get("max_drawdown")
+    win_rate = metrics.get("win_rate")
+    sharpe_ratio = metrics.get("sharpe_ratio")
+    final_equity = metrics.get("final_equity")
+    trades_count = metrics.get("trades")
+
+    rows.extend(
+        [
+            {"구분": "결과", "항목": "총 수익률 (%)", "값": _format_percent(total_return)},
+            {"구분": "결과", "항목": "최대 낙폭 (%)", "값": _format_percent(max_drawdown)},
+            {"구분": "결과", "항목": "승률 (%)", "값": _format_percent(win_rate)},
+            {"구분": "결과", "항목": "샤프 지수", "값": "-" if sharpe_ratio is None or (isinstance(sharpe_ratio, float) and np.isnan(sharpe_ratio)) else f"{sharpe_ratio:.2f}"},
+            {"구분": "결과", "항목": "총 거래 수", "값": str(trades_count if trades_count is not None else "-")},
+            {"구분": "결과", "항목": "최종 자산 (₩)", "값": _format_number(final_equity)},
+        ]
+    )
+
+    return pd.DataFrame(rows, columns=["구분", "항목", "값"])
 
 
 def render_backtest_results(
@@ -344,6 +418,8 @@ def render_backtest_results(
     take_profit_pct: float,
     stop_loss_pct: float,
     ma_cooldown_minutes: int,
+    *,
+    context: Optional[Dict[str, Any]] = None,
 ) -> None:
     charts.render_price_chart(price_df)
     charts.render_equity_curve(equity_curve)
@@ -356,10 +432,11 @@ def render_backtest_results(
         f"MA 쿨다운: {ma_cooldown_minutes}분"
     )
 
-    display_df = format_trade_table(
+    display_df, export_df = format_trade_table(
         trades_df,
         take_profit_pct=take_profit_pct,
         stop_loss_pct=stop_loss_pct,
+        return_export=True,
     )
     if display_df.empty:
         st.info("거래 내역이 없습니다.")
@@ -372,12 +449,21 @@ def render_backtest_results(
         st.dataframe(truncated_df, use_container_width=True, height=420)
 
         excel_buffer = io.BytesIO()
-        export_df = display_df.reset_index().rename(columns={"index": "No."})
+        export_df_with_index = export_df.copy()
+        export_df_with_index.insert(0, "No.", np.arange(1, len(export_df_with_index) + 1))
+
         with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
-            export_df.to_excel(writer, index=False, sheet_name="trades")
-            worksheet = writer.sheets["trades"]
-            worksheet.freeze_panes(1, 0)
-            style_trade_sheet(writer.book, worksheet, export_df)
+            summary_df = _build_summary_sheet(context, metrics, initial_capital, position_capital, take_profit_pct, stop_loss_pct, ma_cooldown_minutes, price_df)
+            summary_df.to_excel(writer, index=False, sheet_name="summary")
+            summary_ws = writer.sheets["summary"]
+            summary_ws.set_column(0, 0, 12)
+            summary_ws.set_column(1, 1, 22)
+            summary_ws.set_column(2, 2, 28)
+
+            export_df_with_index.to_excel(writer, index=False, sheet_name="trades")
+            trades_ws = writer.sheets["trades"]
+            trades_ws.freeze_panes(1, 0)
+            style_trade_sheet(writer.book, trades_ws, export_df_with_index)
         excel_buffer.seek(0)
         st.download_button(
             "전체 거래 XLSX 다운로드",
@@ -536,6 +622,7 @@ def main() -> None:
             take_profit_pct=tp_ctx,
             stop_loss_pct=sl_ctx,
             ma_cooldown_minutes=cooldown_ctx,
+            context=context,
         )
         return
 
@@ -665,6 +752,7 @@ def main() -> None:
         take_profit_pct=state.take_profit_pct,
         stop_loss_pct=state.stop_loss_pct,
         ma_cooldown_minutes=state.ma_cooldown_minutes,
+        context=context,
     )
 
 

@@ -31,6 +31,7 @@ class BacktestEngine:
         stop_loss_price: float
         entry_fee_return: float
         entry_ma_value: Optional[float]
+        entry_rsi_value: Optional[float]
 
     def __init__(self, fee_rate: float = 0.0004, default_trade_capital: Optional[float] = None):
         self.fee_rate = fee_rate
@@ -100,6 +101,7 @@ class BacktestEngine:
         rows["engine_exit_reason"] = ""
         rows["engine_exit_price"] = np.nan
         rows["engine_entry_ma"] = np.nan
+        rows["engine_entry_rsi"] = np.nan
 
         def _set_row_position_state(idx: int, state: Optional[BacktestEngine.PositionState]) -> None:
             if state is None:
@@ -108,12 +110,14 @@ class BacktestEngine:
                 rows.at[idx, "engine_take_profit"] = np.nan
                 rows.at[idx, "engine_stop_loss"] = np.nan
                 rows.at[idx, "engine_entry_ma"] = np.nan
+                rows.at[idx, "engine_entry_rsi"] = np.nan
             else:
                 rows.at[idx, "engine_position"] = state.direction
                 rows.at[idx, "engine_entry_price"] = state.entry_price
                 rows.at[idx, "engine_take_profit"] = state.take_profit_price
                 rows.at[idx, "engine_stop_loss"] = state.stop_loss_price
                 rows.at[idx, "engine_entry_ma"] = state.entry_ma_value
+                rows.at[idx, "engine_entry_rsi"] = state.entry_rsi_value
 
         def _calculate_targets(entry_px: float, direction: int) -> tuple[float, float]:
             if direction > 0:
@@ -130,6 +134,7 @@ class BacktestEngine:
             idx: int,
             ts: Optional[pd.Timestamp],
             ma_value: Optional[float],
+            rsi_value: Optional[float],
         ) -> BacktestEngine.PositionState:
             take_profit_price, stop_loss_price = _calculate_targets(price, direction)
             entry_fee_return = self.fee_rate * capital_fraction * leverage
@@ -143,11 +148,13 @@ class BacktestEngine:
                 stop_loss_price=stop_loss_price,
                 entry_fee_return=entry_fee_return,
                 entry_ma_value=ma_value,
+                entry_rsi_value=float(rsi_value) if rsi_value is not None and not pd.isna(rsi_value) else None,
             )
             _set_row_position_state(idx, state)
             return state
 
         position_state: Optional[BacktestEngine.PositionState] = None
+        last_valid_rsi: Optional[float] = None
 
         for idx, row in rows.iterrows():
             ts = pd.to_datetime(row["timestamp"], errors="coerce")
@@ -161,10 +168,15 @@ class BacktestEngine:
             prior_exit_signal = str(context_row.get("exit_signal", ""))
 
             ma_value = row.get("ma_trend")
+            rsi_value = row.get("rsi")
+            if rsi_value is not None and not pd.isna(rsi_value):
+                last_valid_rsi = float(rsi_value)
+            else:
+                rsi_value = last_valid_rsi
             if position_state is None:
                 _set_row_position_state(idx, None)
                 if signal in (1, -1):
-                    position_state = _open_position(signal, close_price, idx, ts, ma_value)
+                    position_state = _open_position(signal, close_price, idx, ts, ma_value, rsi_value)
                 continue
 
             exit_flag = False
@@ -253,6 +265,7 @@ class BacktestEngine:
                         "entry_time": _to_iso(position_state.entry_time),
                         "entry_price": position_state.entry_price,
                         "entry_ma_value": position_state.entry_ma_value,
+                        "entry_rsi": position_state.entry_rsi_value,
                         "exit_index": idx,
                         "exit_time": _to_iso(ts),
                         "direction": "long" if direction > 0 else "short",
@@ -277,7 +290,7 @@ class BacktestEngine:
                 position_state = None
 
                 if allow_reentry:
-                    position_state = _open_position(signal, close_price, idx, ts, ma_value)
+                    position_state = _open_position(signal, close_price, idx, ts, ma_value, rsi_value)
 
         if position_state is not None:
             idx = len(rows) - 1
@@ -298,6 +311,7 @@ class BacktestEngine:
                     "entry_time": _to_iso(position_state.entry_time),
                     "entry_price": position_state.entry_price,
                     "entry_ma_value": position_state.entry_ma_value,
+                    "entry_rsi": position_state.entry_rsi_value,
                     "exit_index": idx,
                     "exit_time": _to_iso(ts),
                     "direction": "long" if direction > 0 else "short",

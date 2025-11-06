@@ -227,3 +227,130 @@
 2025-11-06 22:59:28,751 - INFO - Streamlit app initialization
 2025-11-06 22:59:29,546 - INFO - Streamlit app initialization
 2025-11-06 22:59:30,666 - INFO - Streamlit app initialization
+2025-11-06 23:02:42,709 - INFO - Streamlit app initialization
+2025-11-06 23:02:49,645 - INFO - Streamlit app initialization
+2025-11-06 23:02:51,360 - INFO - Backtest start | 2025-11-04 ~ 2025-11-06 | timeframe 5T | leverage x10 | TP 2.00% | SL 1.50% | cooldown 60 min
+2025-11-06 23:02:51,566 - INFO - Backtest end   | trades 8 | total return 0.05%
+2025-11-06 23:02:51,597 - INFO - Backtest saved | record id 20251106140251_efae0f7c792646df8fa0b976b316e439
+2025-11-06 23:03:10,914 - INFO - Streamlit app initialization
+2025-11-06 23:03:17,504 - INFO - Streamlit app initialization
+2025-11-06 23:04:04,207 - INFO - Streamlit app initialization
+2025-11-06 23:08:13,171 - INFO - Streamlit app initialization
+2025-11-06 23:08:31,093 - INFO - Streamlit app initialization
+2025-11-06 23:10:13,805 - INFO - Streamlit app initialization
+2025-11-06 23:10:16,077 - INFO - Streamlit app initialization
+2025-11-06 23:11:37,393 - INFO - Backtest start | 2025-01-01 ~ 2025-11-06 | timeframe 5T | leverage x10 | TP 2.00% | SL 1.50% | cooldown 60 min
+2025-11-06 23:11:58,844 - INFO - Backtest end   | trades 906 | total return -0.59%
+2025-11-06 23:12:00,598 - INFO - Backtest saved | record id 20251106141158_f811a9c866ce46b2904c21ae4dbb10d7
+2025-11-06 23:12:31,256 - INFO - Streamlit app initialization
+2025-11-06 23:13:04,642 - INFO - Streamlit app initialization
+2025-11-06 23:13:07,639 - INFO - Streamlit app initialization
+2025-11-06 23:13:08,323 - INFO - Streamlit app initialization
+2025-11-06 23:13:09,255 - INFO - Streamlit app initialization
+2025-11-06 23:17:53,248 - INFO - Streamlit app initialization
+2025-11-06 23:18:01,433 - INFO - Streamlit app initialization
+2025-11-06 23:18:04,111 - INFO - Streamlit app initialization
+2025-11-06 23:18:04,537 - INFO - Streamlit app initialization
+2025-11-06 23:18:06,013 - INFO - Streamlit app initialization
+2025-11-06 23:18:06,957 - INFO - Streamlit app initialization
+2025-11-06 23:18:09,263 - INFO - Streamlit app initialization
+2025-11-06 23:18:12,768 - INFO - Streamlit app initialization
+2025-11-06 23:21:32,580 - INFO - Backtest start | 2020-03-26 ~ 2025-11-06 | timeframe 5T | leverage x10 | TP 2.00% | SL 1.50% | cooldown 180 min
+2025-11-06 23:23:56,666 - INFO - Backtest end   | trades 4971 | total return -1.32%
+2025-11-06 23:24:07,137 - INFO - Backtest saved | record id 20251106142356_c819fef4746b4d6c8aad26e57deef67a
+2025-11-06 23:24:24,370 - INFO - Streamlit app initialization
+2025-11-06 23:27:45,307 - INFO - Backtest start | 2020-03-26 ~ 2025-11-06 | timeframe 5T | leverage x10 | TP 3.01% | SL 1.50% | cooldown 60 min
+2025-11-06 23:29:40,022 - INFO - Backtest end   | trades 6303 | total return -2.58%
+2025-11-06 23:29:48,840 - INFO - Backtest saved | record id 20251106142940_95bc97fd97a444a0b041596ccf5fac1c
+2025-11-06 23:31:26,141 - INFO - Streamlit app initialization
+2025-11-07 01:37:24,595 - INFO - Streamlit app initialization
+2025-11-07 01:37:26,801 - INFO - Streamlit app initialization
+2025-11-07 01:37:38,822 - INFO - Backtest start | 2025-09-23 ~ 2025-11-06 | timeframe 5T | leverage x10 | TP 3.01% | SL 1.50% | cooldown 60 min
+2025-11-07 01:37:41,829 - INFO - Backtest end   | trades 116 | total return -0.02%
+2025-11-07 01:37:42,109 - INFO - Backtest saved | record id 20251106163741_d4f9dddeb0a84daab52bf02f0af0b9a3
+2025-11-07 01:37:48,999 - INFO - Streamlit app initialization
+2025-11-07 01:38:29,689 - INFO - Streamlit app initialization
+2025-11-07 01:38:30,731 - INFO - Streamlit app initialization
+2025-11-07 01:38:31,651 - INFO - Streamlit app initialization
+2025-11-07 01:38:32,310 - INFO - Streamlit app initialization
+2025-11-07 01:38:33,198 - INFO - Streamlit app initialization
+2025-11-07 01:38:35,330 - INFO - Streamlit app initialization
+2025-11-07 01:38:47,529 - INFO - Backtest start | 2025-09-23 ~ 2025-11-06 | timeframe 5T | leverage x10 | TP 2.48% | SL 1.50% | cooldown 60 min
+2025-11-07 01:38:50,525 - INFO - Backtest end   | trades 121 | total return -0.04%
+2025-11-07 01:38:50,747 - INFO - Backtest saved | record id 20251106163850_9af2378af33f4155989470576bfd20d5
+2025-11-07 01:39:19,223 - INFO - Streamlit app initialization
+2025-11-07 01:39:20,681 - INFO - Streamlit app initialization
+2025-11-07 01:39:32,748 - INFO - Backtest start | 2025-09-23 ~ 2025-11-06 | timeframe 5T | leverage x10 | TP 2.48% | SL 1.50% | cooldown 300 min
+2025-11-07 01:39:35,733 - INFO - Backtest end   | trades 61 | total return 0.00%
+2025-11-07 01:39:35,993 - INFO - Backtest saved | record id 20251106163935_c7a748a0934447e6b906d1aaca679308
+2025-11-07 01:39:44,361 - INFO - Streamlit app initialization
+2025-11-07 01:39:45,715 - INFO - Streamlit app initialization
+2025-11-07 01:39:47,112 - INFO - Streamlit app initialization
+2025-11-07 01:39:48,358 - INFO - Streamlit app initialization
+2025-11-07 01:39:48,971 - INFO - Streamlit app initialization
+2025-11-07 01:40:00,615 - INFO - Backtest start | 2025-09-23 ~ 2025-11-06 | timeframe 5T | leverage x10 | TP 2.48% | SL 1.50% | cooldown 240 min
+2025-11-07 01:40:03,627 - INFO - Backtest end   | trades 68 | total return 0.03%
+2025-11-07 01:40:03,888 - INFO - Backtest saved | record id 20251106164003_2f97fb61be3e44a6a4021ed039c37ee8
+2025-11-07 01:40:06,854 - INFO - Streamlit app initialization
+2025-11-07 01:40:07,577 - INFO - Streamlit app initialization
+2025-11-07 01:40:19,983 - INFO - Backtest start | 2025-09-23 ~ 2025-11-06 | timeframe 5T | leverage x10 | TP 2.48% | SL 1.50% | cooldown 360 min
+2025-11-07 01:40:23,241 - INFO - Backtest end   | trades 59 | total return -0.02%
+2025-11-07 01:40:23,471 - INFO - Backtest saved | record id 20251106164023_420613224084465e8df64c38fbdd4e76
+2025-11-07 01:40:28,323 - INFO - Streamlit app initialization
+2025-11-07 01:40:30,768 - INFO - Streamlit app initialization
+2025-11-07 01:40:31,320 - INFO - Streamlit app initialization
+2025-11-07 01:40:43,685 - INFO - Backtest start | 2025-09-23 ~ 2025-11-06 | timeframe 5T | leverage x10 | TP 2.48% | SL 1.50% | cooldown 1440 min
+2025-11-07 01:40:46,705 - INFO - Backtest end   | trades 6 | total return -0.01%
+2025-11-07 01:40:46,963 - INFO - Backtest saved | record id 20251106164046_0c25b5366f084939aa7dd8704e3ade3d
+2025-11-07 01:47:14,149 - INFO - Streamlit app initialization
+2025-11-07 01:48:18,147 - INFO - Streamlit app initialization
+2025-11-07 01:49:14,577 - INFO - Streamlit app initialization
+2025-11-07 01:49:17,221 - INFO - Streamlit app initialization
+2025-11-07 01:49:25,555 - INFO - Streamlit app initialization
+2025-11-07 01:49:26,094 - INFO - Streamlit app initialization
+2025-11-07 01:49:26,483 - INFO - Streamlit app initialization
+2025-11-07 01:49:26,947 - INFO - Streamlit app initialization
+2025-11-07 01:49:28,605 - INFO - Streamlit app initialization
+2025-11-07 01:49:29,570 - INFO - Streamlit app initialization
+2025-11-07 01:49:31,501 - INFO - Streamlit app initialization
+2025-11-07 01:49:32,117 - INFO - Streamlit app initialization
+2025-11-07 01:49:39,965 - INFO - Streamlit app initialization
+2025-11-07 01:49:40,531 - INFO - Streamlit app initialization
+2025-11-07 01:49:41,537 - INFO - Streamlit app initialization
+2025-11-07 01:49:41,848 - INFO - Streamlit app initialization
+2025-11-07 01:49:43,428 - INFO - Streamlit app initialization
+2025-11-07 01:49:44,159 - INFO - Streamlit app initialization
+2025-11-07 01:49:44,798 - INFO - Streamlit app initialization
+2025-11-07 01:49:45,382 - INFO - Streamlit app initialization
+2025-11-07 01:49:57,378 - INFO - Streamlit app initialization
+2025-11-07 01:49:58,137 - INFO - Streamlit app initialization
+2025-11-07 01:49:59,168 - INFO - Streamlit app initialization
+2025-11-07 01:50:00,671 - INFO - Streamlit app initialization
+2025-11-07 01:50:01,558 - INFO - Streamlit app initialization
+2025-11-07 01:50:02,333 - INFO - Streamlit app initialization
+2025-11-07 01:50:04,692 - INFO - Streamlit app initialization
+2025-11-07 01:50:06,350 - INFO - Streamlit app initialization
+2025-11-07 01:50:17,095 - INFO - Streamlit app initialization
+2025-11-07 01:50:22,141 - INFO - Streamlit app initialization
+2025-11-07 01:50:24,001 - INFO - Streamlit app initialization
+2025-11-07 01:50:26,157 - INFO - Streamlit app initialization
+2025-11-07 01:50:27,211 - INFO - Streamlit app initialization
+2025-11-07 01:50:27,662 - INFO - Streamlit app initialization
+2025-11-07 01:50:30,995 - INFO - Streamlit app initialization
+2025-11-07 01:58:50,209 - INFO - Backtest start | 2020-03-26 ~ 2025-11-06 | timeframe 5T | leverage x10 | TP 2.51% | SL 1.50% | cooldown 360 min
+2025-11-07 01:59:15,294 - INFO - Backtest start | 2020-03-26 ~ 2025-11-06 | timeframe 5T | leverage x10 | TP 2.32% | SL 1.50% | cooldown 360 min
+2025-11-07 02:00:26,361 - INFO - Backtest start | 2020-03-26 ~ 2025-11-06 | timeframe 5T | leverage x10 | TP 2.51% | SL 1.50% | cooldown 1440 min
+2025-11-07 02:02:41,964 - INFO - Backtest start | 2020-03-26 ~ 2025-11-06 | timeframe 5T | leverage x10 | TP 2.49% | SL 2.00% | cooldown 360 min
+2025-11-07 02:05:03,376 - INFO - Backtest end   | trades 3067 | total return -0.75%
+2025-11-07 02:05:45,650 - INFO - Backtest end   | trades 3128 | total return -1.15%
+2025-11-07 02:07:05,483 - INFO - Backtest end   | trades 314 | total return -0.49%
+2025-11-07 02:07:51,264 - INFO - Backtest end   | trades 2916 | total return -0.72%
+2025-11-07 02:08:17,030 - INFO - Backtest saved | record id 20251106170503_bb8b5fc9886d4efe93629ec65e8cb8cd
+2025-11-07 02:08:18,515 - INFO - Backtest saved | record id 20251106170545_b184e6b29f4641bb847e8fe40dd0cb2b
+2025-11-07 02:08:21,220 - INFO - Backtest saved | record id 20251106170705_d3079d2caa494975b173eaafe8a36ccd
+2025-11-07 02:08:24,207 - INFO - Backtest saved | record id 20251106170751_a021b0d6729740c29ac82d3004285374
+2025-11-07 07:59:40,235 - INFO - Streamlit app initialization
+2025-11-07 07:59:44,339 - INFO - Streamlit app initialization
+2025-11-07 07:59:46,701 - INFO - Streamlit app initialization
+2025-11-07 07:59:46,710 - INFO - Loading saved backtest: 20251106170751_a021b0d6729740c29ac82d3004285374
+2025-11-07 07:59:49,016 - INFO - Finished loading backtest: 20251106170751_a021b0d6729740c29ac82d3004285374
