@@ -22,6 +22,7 @@ from src.backtesting.engine import BacktestEngine
 from src.strategy.ma200_stochrsi import MA200StochRSIStrategy, StrategyParameters
 from src.utils.logger_confg import get_logger
 from src.utils import storage
+from src.utils.excel_styles import style_trade_sheet
 
 logger = get_logger()
 
@@ -283,21 +284,26 @@ def render_backtest_results(
     if display_df.empty:
         st.info("거래 내역이 없습니다.")
     else:
-        max_rows = 300
+        max_rows = 500
         total_rows = len(display_df)
         truncated_df = display_df.head(max_rows)
         if total_rows > max_rows:
             st.info(f"총 {total_rows}건 중 처음 {max_rows}건만 표에 표시합니다. 전체 내역은 아래에서 다운로드하세요.")
         st.dataframe(truncated_df, use_container_width=True, height=420)
 
-        csv_buffer = io.StringIO()
-        csv_buffer.write("\ufeff")
-        display_df.reset_index().rename(columns={"index": "No."}).to_csv(csv_buffer, index=False)
+        excel_buffer = io.BytesIO()
+        export_df = display_df.reset_index().rename(columns={"index": "No."})
+        with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
+            export_df.to_excel(writer, index=False, sheet_name="trades")
+            worksheet = writer.sheets["trades"]
+            worksheet.freeze_panes(1, 0)
+            style_trade_sheet(writer.book, worksheet, export_df)
+        excel_buffer.seek(0)
         st.download_button(
-            "전체 거래 CSV 다운로드",
-            csv_buffer.getvalue(),
-            file_name="trades.csv",
-            mime="text/csv",
+            "전체 거래 XLSX 다운로드",
+            data=excel_buffer,
+            file_name="trades.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
 
